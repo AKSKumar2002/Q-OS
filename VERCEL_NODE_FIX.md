@@ -68,12 +68,13 @@ After redeployment, check the build logs:
 Your `vercel.json` now has:
 ```json
 {
-  "buildCommand": "pnpm -w run packages:build && pnpm -w run demo:build"
+  "buildCommand": "pnpm -w run packages:build && pnpm -w run demo:build && cp -r demo/dist dist",
+  "outputDirectory": "dist"
 }
 ```
 
-**Why `-w`?**
-This flag tells pnpm to run the script in the **workspace root**. Without it, Vercel might try to run it inside the `demo` folder, causing `ERR_PNPM_NO_SCRIPT`.
+**Why `cp -r`?**
+Vercel was failing to find the output directory. This command copies the build output to the root `dist` folder, which is where Vercel expects it by default.
 
 ---
 
