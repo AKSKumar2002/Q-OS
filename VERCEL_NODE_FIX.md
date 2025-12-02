@@ -68,14 +68,27 @@ After redeployment, check the build logs:
 Your `vercel.json` now has:
 ```json
 {
-  "buildCommand": "pnpm run packages:build && pnpm run demo:build"
+  "buildCommand": "pnpm -w run packages:build && pnpm -w run demo:build"
 }
 ```
 
-This ensures:
-1. All workspace packages are built first
-2. Then the demo is built
-3. Using Node.js 20 (via environment variable)
+**Why `-w`?**
+This flag tells pnpm to run the script in the **workspace root**. Without it, Vercel might try to run it inside the `demo` folder, causing `ERR_PNPM_NO_SCRIPT`.
+
+---
+
+## ⚠️ CRITICAL: Node Version Check
+
+Your logs show:
+`WARN Unsupported engine: wanted: {"node":"20.x"} (current: {"node":"v24.11.1"})`
+
+This means **Vercel is STILL using Node 24**. You **MUST** set the environment variable in Vercel Dashboard to fix this.
+
+1. Go to **Settings** → **Environment Variables**
+2. Add `NODE_VERSION` = `20`
+3. **Redeploy**
+
+If you don't do this, the build will fail with esbuild errors later!
 
 ---
 
