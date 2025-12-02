@@ -46,7 +46,7 @@ git push -u origin main
    
    **Build Command:**
    ```bash
-   cd demo && pnpm run build
+   pnpm build
    ```
    
    **Output Directory:**
@@ -128,11 +128,11 @@ The following files have been created for you:
 
 **Build Command:**
 ```bash
-cd demo && pnpm run build
+pnpm build
 ```
-This navigates to the demo directory and runs the build script which:
-1. Runs TypeScript compilation
-2. Runs Vite build
+This runs the root-level build script which:
+1. Builds all packages in sequence (`packages:build`)
+2. Then builds the demo application
 3. Outputs to `demo/dist`
 
 **Output Directory:**
