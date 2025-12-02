@@ -75,7 +75,7 @@ export default defineConfig(({ command }) => {
 			}),
 		],
 		build: {
-			outDir: resolve(__dirname, "../dist"),
+			outDir: BUILD_DIR,
 			rollupOptions: {
 				external: ["vite", "path", /vite-plugin-/g, /@vitejs\/plugin-/g, "rollup"],
 				plugins: [
