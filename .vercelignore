@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+.vite
+.next
+
+# Development
+.git
+.vscode
+*.log
+
+# Examples and docs (optional, comment out if you want to include them)
+examples
+docs
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx

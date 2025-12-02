@@ -1,0 +1,15 @@
+{
+	"npm.packageManager": "pnpm",
+	"editor.rulers": [
+		120
+	],
+	"workbench.colorCustomizations": {
+		"editorRuler.foreground": "#1F1F1F"
+	},
+	"eslint.useFlatConfig": true,
+	"eslint.validate": [
+		"ts", "tsx"
+	],
+	"typescript.preferences.importModuleSpecifier": "relative",
+	"javascript.preferences.importModuleSpecifier": "relative"
+}
