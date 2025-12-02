@@ -148,6 +148,23 @@ The `vercel.json` includes SPA (Single Page Application) routing support, so all
 
 ## 🐛 Troubleshooting
 
+### esbuild Errors on Vercel
+
+**Issue:** Build fails with esbuild errors on Node.js v24
+
+**Error:**
+```
+Error: Command "pnpm build" exited with 1
+at /vercel/path0/node_modules/esbuild/lib/main.js:945:25
+```
+
+**Solution:** ✅ **FIXED** - The project now specifies Node.js 20 LTS in:
+- `package.json` → `"engines": { "node": ">=18.12.0 <21" }`
+- `vercel.json` → `NODE_VERSION=20`
+- `.nvmrc` → `20`
+
+Vercel will automatically use Node.js 20 instead of the experimental v24.
+
 ### Build Fails on Vercel
 
 **Issue:** ESLint errors during build
