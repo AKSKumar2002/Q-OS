@@ -1,0 +1,6 @@
+import { App } from '@prozilla-os/core';
+import { WindowProps } from '@prozilla-os/core';
+
+export declare const appCenter: App<WindowProps>;
+
+export { }

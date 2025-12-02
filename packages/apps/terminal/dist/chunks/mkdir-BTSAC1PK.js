@@ -1,0 +1,11 @@
+import { C as o } from "./command-nBL1aO7T.js";
+const a = new o().setManual({
+  purpose: "Create a directory"
+}).setRequireArgs(!0).setExecute(function(t, n) {
+  const { currentDirectory: e } = n, r = t[0];
+  return e.findSubFolder(r) ? { blank: !0 } : (e.createFolder(r), { blank: !0 });
+});
+export {
+  a as mkdir
+};
+//# sourceMappingURL=mkdir-BTSAC1PK.js.map
