@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import Draggable from 'react-draggable';
+import { Rnd } from 'react-rnd';
 import Settings from '../apps/settings';
 import ReactGA from 'react-ga';
 import { displayTerminal } from '../apps/terminal'
@@ -16,6 +16,8 @@ export class Window extends Component {
             height: 85,
             closed: false,
             maximized: false,
+            x: 60,
+            y: 10,
             parentSize: {
                 height: 100,
                 width: 100
@@ -73,12 +75,18 @@ export class Window extends Component {
         this.setState({ cursorType: "cursor-default" })
     }
 
-    handleVerticleResize = () => {
-        this.setState({ height: this.state.height + 0.1 }, this.resizeBoundries);
+    handleResize = (e, direction, ref, delta, position) => {
+        const newWidth = (ref.offsetWidth / window.innerWidth) * 100;
+        const newHeight = (ref.offsetHeight / window.innerHeight) * 100;
+        this.setState({
+            width: newWidth,
+            height: newHeight,
+            ...position
+        }, this.resizeBoundries);
     }
 
-    handleHorizontalResize = () => {
-        this.setState({ width: this.state.width + 0.1 }, this.resizeBoundries);
+    handleDrag = (e, d) => {
+        this.setState({ x: d.x, y: d.y });
     }
 
     setWinowsPosition = () => {
@@ -143,7 +151,13 @@ export class Window extends Component {
             this.setWinowsPosition();
             // translate window to maximize position
             r.style.transform = `translate(-1pt,-2pt)`;
-            this.setState({ maximized: true, height: 96.3, width: 100.2 });
+            this.setState({
+                maximized: true,
+                height: 96.3,
+                width: 100.2,
+                x: 0,
+                y: 0
+            });
             this.props.hideSideBar(this.id, true);
         }
     }
@@ -160,24 +174,31 @@ export class Window extends Component {
 
     render() {
         return (
-            <Draggable
-                axis="both"
-                handle=".bg-ub-window-title"
-                grid={[1, 1]}
-                scale={1}
-                onStart={this.changeCursorToMove}
-                onStop={this.changeCursorToDefault}
-                onDrag={this.checkOverlap}
-                allowAnyClick={false}
-                defaultPosition={{ x: this.startX, y: this.startY }}
-                bounds={{ left: 0, top: 0, right: this.state.parentSize.width, bottom: this.state.parentSize.height }}
+            <Rnd
+                size={{
+                    width: `${this.state.width}%`,
+                    height: `${this.state.height}%`
+                }}
+                position={{ x: this.state.x, y: this.state.y }}
+                onDragStart={this.changeCursorToMove}
+                onDragStop={this.changeCursorToDefault}
+                onDrag={this.handleDrag}
+                onResize={this.handleResize}
+                onResizeStart={this.focusWindow}
+                minWidth="25%"
+                minHeight="25%"
+                bounds="parent"
+                dragHandleClassName="bg-ub-window-title"
+                enableResizing={!this.state.maximized}
+                disableDragging={this.state.maximized}
+                style={{
+                    zIndex: this.props.isFocused ? 30 : 20,
+                }}
             >
-                <div style={{ width: `${this.state.width}%`, height: `${this.state.height}%` }}
-                    className={this.state.cursorType + " " + (this.state.closed ? " closed-window " : "") + (this.state.maximized ? " duration-300 rounded-none" : " rounded-lg rounded-b-none") + (this.props.minimized ? " opacity-0 invisible duration-200 " : "") + (this.props.isFocused ? " z-30 " : " z-20 notFocused") + " opened-window overflow-hidden min-w-1/4 min-h-1/4 main-window absolute window-shadow border-black border-opacity-40 border border-t-0 flex flex-col"}
+                <div
+                    className={this.state.cursorType + " " + (this.state.closed ? " closed-window " : "") + (this.state.maximized ? " duration-300 rounded-none" : " rounded-lg rounded-b-none") + (this.props.minimized ? " opacity-0 invisible duration-200 " : "") + (this.props.isFocused ? "" : " notFocused") + " opened-window overflow-hidden main-window window-shadow border-black border-opacity-40 border border-t-0 flex flex-col h-full w-full"}
                     id={this.id}
                 >
-                    <WindowYBorder resize={this.handleHorizontalResize} />
-                    <WindowXBorder resize={this.handleVerticleResize} />
                     <WindowTopBar title={this.props.title} />
                     <WindowEditButtons minimize={this.minimizeWindow} maximize={this.maximizeWindow} isMaximised={this.state.maximized} close={this.closeWindow} id={this.id} />
                     {(this.id === "settings"
@@ -186,7 +207,7 @@ export class Window extends Component {
                             addFolder={this.props.id === "terminal" ? this.props.addFolder : null}
                             openApp={this.props.openApp} />)}
                 </div>
-            </Draggable >
+            </Rnd >
         )
     }
 }
@@ -200,35 +221,6 @@ export function WindowTopBar(props) {
             <div className="flex justify-center text-sm font-bold">{props.title}</div>
         </div>
     )
-}
-
-// Window's Borders
-export class WindowYBorder extends Component {
-    componentDidMount() {
-        this.trpImg = new Image(0, 0);
-        this.trpImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        this.trpImg.style.opacity = 0;
-    }
-    render() {
-        return (
-            <div className=" window-y-border border-transparent border-1 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" onDragStart={(e) => { e.dataTransfer.setDragImage(this.trpImg, 0, 0) }} onDrag={this.props.resize}>
-            </div>
-        )
-    }
-}
-
-export class WindowXBorder extends Component {
-    componentDidMount() {
-        this.trpImg = new Image(0, 0);
-        this.trpImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        this.trpImg.style.opacity = 0;
-    }
-    render() {
-        return (
-            <div className=" window-x-border border-transparent border-1 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" onDragStart={(e) => { e.dataTransfer.setDragImage(this.trpImg, 0, 0) }} onDrag={this.props.resize}>
-            </div>
-        )
-    }
 }
 
 // Window's Edit Buttons

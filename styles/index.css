@@ -1,4 +1,4 @@
-body{
+body {
     font-family: 'Ubuntu', sans-serif;
     font-display: swap
 }
@@ -88,16 +88,65 @@ input[type=range].ubuntu-slider::-webkit-slider-thumb {
     width: 0;
 }
 
-.window-y-border {
-    height: calc(100% - 10px);
-    width: calc(100% + 10px);
+/* React-rnd resize handle styles */
+.react-resizable-handle {
+    position: absolute;
+}
+
+.react-resizable-handle-se {
+    bottom: 0;
+    right: 0;
+    cursor: se-resize;
+}
+
+.react-resizable-handle-sw {
+    bottom: 0;
+    left: 0;
+    cursor: sw-resize;
+}
+
+.react-resizable-handle-ne {
+    top: 0;
+    right: 0;
+    cursor: ne-resize;
+}
+
+.react-resizable-handle-nw {
+    top: 0;
+    left: 0;
+    cursor: nw-resize;
+}
+
+.react-resizable-handle-n {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    cursor: n-resize;
+}
+
+.react-resizable-handle-s {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    cursor: s-resize;
+}
+
+.react-resizable-handle-e {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
     cursor: e-resize;
 }
 
-.window-x-border {
-    height: calc(100% + 10px);
-    width: calc(100% - 10px);
-    cursor: n-resize;
+.react-resizable-handle-w {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: w-resize;
 }
 
 .notFocused {
@@ -197,9 +246,11 @@ input[type=range].ubuntu-slider::-webkit-slider-thumb {
 .list-star {
     list-style: "🌟";
 }
+
 .list-social {
     list-style: "🔗";
 }
+
 .list-linkedin {
     list-style: "🔗";
 }
