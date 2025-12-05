@@ -124,7 +124,7 @@ function About() {
                 <li className=" list-pc">I'm an <span className=" font-medium">Undergraduate Student</span> currently pursuing Computer Science from GL Bajaj Institute of Technology and Management, and I'm open for internship opportunities!</li>
                 <li className=" mt-3 list-star"> I have interest in Web development and Machine learning</li>
                 <li className=" mt-3 list-time"> Other than coding, I love to study about human pshycology and watching science fiction movies</li>
-                <li className=" mt-3 list-social">Connect with me - 
+                <li className=" mt-3 list-social">Connect with me -
                     <p><u><a href="https://www.linkedin.com/in/anuragpathak0/" target="_blank" rel="noreferrer">Linkedin</a></u></p>
                     <p><u><a href="https://github.com/ANURAG-PATHAK" target="_blank" rel="noreferrer">GitHub</a></u></p>
                     <p><u><a className='text-underline' href='mailto:pathakanurag605@gmail.com'><u>GMail</u></a></u></p>
@@ -213,7 +213,7 @@ function Skills() {
                         <img className=" m-1" src="https://img.shields.io/badge/-Express.js-grey?style=flat&logo=express" alt="Express" />
                         <img className=" m-1" src="https://img.shields.io/badge/-React-grey?style=flat&logo=react" alt="React" />
                         <img src="https://img.shields.io/badge/-Nodejs-grey?style=flat&logo=Node.js" alt="Node.js" className="m-1" />
-                        <img className=" m-1" src="http://img.shields.io/badge/-Linux-grey?style=flat&logo=linux" alt="linux" /> 
+                        <img className=" m-1" src="http://img.shields.io/badge/-Linux-grey?style=flat&logo=linux" alt="linux" />
                     </div>
                 </div>
             </div>
@@ -278,7 +278,7 @@ function Projects() {
                                 <div className="flex flex-wrap justify-between items-center">
                                     <div className='flex justify-center items-center'>
                                         <div className=" text-base md:text-lg mr-2">{project.name}</div>
-                                        <iframe src={`https://ghbtns.com/github-btn.html?user=ANURAG-PATHAK&repo=${projectName}&type=star&count=true`} frameBorder="0" scrolling="0" width="150" height="20" title={project.name.toLowerCase()+"-star"}></iframe>
+                                        <iframe src={`https://ghbtns.com/github-btn.html?user=ANURAG-PATHAK&repo=${projectName}&type=star&count=true`} frameBorder="0" scrolling="0" width="150" height="20" title={project.name.toLowerCase() + "-star"}></iframe>
                                     </div>
                                     <div className="text-gray-300 font-light text-sm">{project.date}</div>
                                 </div>
@@ -309,6 +309,6 @@ function Projects() {
 }
 function Resume() {
     return (
-        <iframe className="h-full w-full" src="./files/resume.pdf" title="resume" frameBorder="0"></iframe>
+        <iframe className="h-full w-full" src="/files/resume.pdf" title="resume" frameBorder="0"></iframe>
     )
 }
