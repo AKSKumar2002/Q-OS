@@ -25,9 +25,9 @@
     "next": "^13.4.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-draggable": "^4.4.5",
     "react-ga": "^3.3.1",
     "react-onclickoutside": "^6.12.2",
-    "react-rnd": "^10.5.2",
     "react-youtube": "^10.1.0"
   },
   "devDependencies": {
