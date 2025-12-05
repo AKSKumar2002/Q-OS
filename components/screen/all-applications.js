@@ -14,12 +14,9 @@ export class AllApplications extends React.Component {
 
     componentDidMount() {
         this.setState({
-            apps: this.props.apps
+            apps: this.props.apps,
+            isAnimating: false // Start animation immediately
         });
-        // Trigger animation on mount
-        setTimeout(() => {
-            this.setState({ isAnimating: false });
-        }, 50);
     }
 
     handleChange = (e) => {
@@ -79,15 +76,17 @@ export class AllApplications extends React.Component {
         return (
             <>
                 {/* Backdrop overlay */}
-                <div className="fixed inset-0 bg-black bg-opacity-30 z-30 backdrop-blur-sm" style={{ animation: 'fadeIn 0.2s ease-out' }}></div>
+                <div className="fixed inset-0 bg-black bg-opacity-30 z-30 backdrop-blur-sm" style={{ animation: 'fadeIn 0.1s ease-out' }}></div>
 
                 {/* Glassmorphic Start Menu */}
                 <div
                     onClick={(e) => e.stopPropagation()}
-                    className={`fixed bottom-0 left-0 ml-14 mb-2 rounded-xl overflow-hidden shadow-2xl z-40 transition-all duration-300 ease-out ${this.state.isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'}`}
+                    className={`fixed bottom-0 left-0 ml-12 md:ml-14 mb-1 md:mb-2 rounded-xl overflow-hidden shadow-2xl z-40 transition-all duration-150 ease-out ${this.state.isAnimating ? 'opacity-0 translate-y-2 scale-98' : 'opacity-100 translate-y-0 scale-100'}`}
                     style={{
-                        width: '580px',
-                        height: '620px',
+                        width: '90vw',
+                        maxWidth: '520px',
+                        height: '85vh',
+                        maxHeight: '600px',
                         background: 'rgba(30, 30, 46, 0.75)',
                         backdropFilter: 'blur(40px)',
                         WebkitBackdropFilter: 'blur(40px)',
@@ -96,12 +95,12 @@ export class AllApplications extends React.Component {
                     }}
                 >
                     {/* Header with Search */}
-                    <div className="p-6 pb-4">
-                        <div className="flex items-center bg-white bg-opacity-10 rounded-lg px-4 py-2.5 border border-white border-opacity-10 hover:bg-opacity-15 transition-all">
+                    <div className="p-4 md:p-6 pb-3 md:pb-4">
+                        <div className="flex items-center bg-white bg-opacity-10 rounded-lg px-3 md:px-4 py-2 border border-white border-opacity-10 hover:bg-opacity-15 transition-all">
                             <img className="w-4 h-4 opacity-60" alt="search icon" src={'./images/logos/search.png'} />
                             <input
-                                className="flex-1 ml-3 bg-transparent text-white placeholder-gray-400 focus:outline-none text-sm"
-                                placeholder="Type to search apps..."
+                                className="flex-1 ml-2 md:ml-3 bg-transparent text-white placeholder-gray-400 focus:outline-none text-sm"
+                                placeholder="Search apps..."
                                 value={this.state.query}
                                 onChange={this.handleChange}
                             />
@@ -109,10 +108,10 @@ export class AllApplications extends React.Component {
                     </div>
 
                     {/* Category Tabs */}
-                    <div className="px-6 flex gap-1 mb-4">
+                    <div className="px-4 md:px-6 flex gap-1 mb-3">
                         <button
                             onClick={this.handleSwitch.bind(this, 0)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${this.state.category === 0
+                            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${this.state.category === 0
                                 ? 'bg-white bg-opacity-15 text-white shadow-sm'
                                 : 'text-gray-300 hover:bg-white hover:bg-opacity-10'
                                 }`}
@@ -121,7 +120,7 @@ export class AllApplications extends React.Component {
                         </button>
                         <button
                             onClick={this.handleSwitch.bind(this, 1)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${this.state.category === 1
+                            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${this.state.category === 1
                                 ? 'bg-white bg-opacity-15 text-white shadow-sm'
                                 : 'text-gray-300 hover:bg-white hover:bg-opacity-10'
                                 }`}
@@ -131,14 +130,14 @@ export class AllApplications extends React.Component {
                     </div>
 
                     {/* Apps Grid */}
-                    <div className="px-6 pb-4 overflow-y-auto" style={{ height: 'calc(100% - 180px)' }}>
-                        <div className="grid grid-cols-5 gap-2">
+                    <div className="px-4 md:px-6 pb-3 overflow-y-auto custom-scrollbar" style={{ height: 'calc(100% - 160px)' }}>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 md:gap-2">
                             {this.renderApps()}
                         </div>
                     </div>
 
                     {/* Footer - User Profile */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-white bg-opacity-5 border-t border-white border-opacity-10 backdrop-blur-xl">
+                    <div className="absolute bottom-0 left-0 right-0 p-3 md:p-4 bg-white bg-opacity-5 border-t border-white border-opacity-10 backdrop-blur-xl">
                         <div className="flex items-center justify-between px-2">
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
@@ -163,6 +162,24 @@ export class AllApplications extends React.Component {
                         to {
                             opacity: 1;
                         }
+                    }
+                    
+                    .custom-scrollbar::-webkit-scrollbar {
+                        width: 6px;
+                    }
+                    
+                    .custom-scrollbar::-webkit-scrollbar-track {
+                        background: rgba(255, 255, 255, 0.05);
+                        border-radius: 10px;
+                    }
+                    
+                    .custom-scrollbar::-webkit-scrollbar-thumb {
+                        background: rgba(255, 255, 255, 0.2);
+                        border-radius: 10px;
+                    }
+                    
+                    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                        background: rgba(255, 255, 255, 0.3);
                     }
                 `}</style>
             </>
