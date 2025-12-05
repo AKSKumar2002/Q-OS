@@ -5,7 +5,7 @@ import { Main } from "./Main";
 
 // Render app
 const root = createRoot(document.getElementById("root") as Container);
-root.render(<React.StrictMode><Main/></React.StrictMode>);
+root.render(<React.StrictMode><Main /></React.StrictMode>);
 
 // Log welcome message
 const asciiLogoWidth = ASCII_LOGO.split("\n")[1].length;

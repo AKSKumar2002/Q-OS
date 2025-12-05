@@ -34,12 +34,12 @@ npx vercel
 Answer the prompts:
 - Set up and deploy "Q-OS"? → Y
 - Which scope? → Select your account
-- Link to existing project? → N
+- Link to existing project? → Y (if q-os project exists) or N (for new)
 - What's your project's name? → q-os (or your preferred name)
 - In which directory is your code located? → ./
 - Want to override settings? → Y
   - Build Command: `pnpm -w run packages:build && pnpm -w run demo:build`
-  - Output Directory: `dist`
+  - Output Directory: `demo/dist`
   - Install Command: `pnpm install`
 
 4. **Deploy to Production**
