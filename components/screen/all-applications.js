@@ -81,7 +81,7 @@ export class AllApplications extends React.Component {
                 {/* Glassmorphic Start Menu */}
                 <div
                     onClick={(e) => e.stopPropagation()}
-                    className={`fixed bottom-0 left-0 ml-12 md:ml-14 mb-1 md:mb-2 rounded-xl overflow-hidden shadow-2xl z-40 transition-all duration-150 ease-out ${this.state.isAnimating ? 'opacity-0 translate-y-2 scale-98' : 'opacity-100 translate-y-0 scale-100'}`}
+                    className={`fixed bottom-0 left-1/2 transform -translate-x-1/2 mb-20 rounded-xl overflow-hidden shadow-2xl z-40 transition-all duration-150 ease-out ${this.state.isAnimating ? 'opacity-0 translate-y-2 scale-98' : 'opacity-100 translate-y-0 scale-100'}`}
                     style={{
                         width: '90vw',
                         maxWidth: '520px',

@@ -30,32 +30,45 @@ export class SideBarApp extends Component {
     };
 
     render() {
+        const scale = this.props.dockScale || 1;
+        const baseSize = 48; // Base width/height in px
+        const size = baseSize * scale;
+
         return (
             <div
                 tabIndex="0"
                 onClick={this.openApp}
                 onMouseEnter={() => {
                     this.setState({ showTitle: true });
+                    if (this.props.onHover) this.props.onHover();
                 }}
                 onMouseLeave={() => {
                     this.setState({ showTitle: false });
+                    // Optional: trigger onLeave() if you want snap-back behavior immediately
                 }}
-                className={(this.props.isClose[this.id] === false && this.props.isFocus[this.id] ? "bg-white bg-opacity-10 " : "") + " w-auto p-2 outline-none relative transition hover:bg-white hover:bg-opacity-10 rounded m-1"}
+                className={(this.props.isClose[this.id] === false && this.props.isFocus[this.id] ? "bg-white bg-opacity-10 " : "") + " outline-none relative transition-all duration-200 ease-out transform rounded-xl m-1 flex justify-center items-center"}
                 id={"sidebar-" + this.props.id}
+                style={{ width: `${size}px`, height: `${size}px` }}
             >
-                <img width="28px" height="28px" className="w-7" src={this.props.icon} alt="Ubuntu App Icon" />
-                <img className={(this.state.scaleImage ? " scale " : "") + " scalable-app-icon w-7 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"} src={this.props.icon} alt="" />
+                <img
+                    width={`${28 * scale}px`}
+                    height={`${28 * scale}px`}
+                    className="w-full h-full object-contain p-1.5"
+                    src={this.props.icon}
+                    alt="Ubuntu App Icon"
+                />
+
                 {
                     (
                         this.props.isClose[this.id] === false
-                            ? <div className=" w-1 h-1 absolute left-0 top-1/2 bg-ub-orange rounded-sm"></div>
+                            ? <div className=" w-1.5 h-1.5 absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-gray-200 rounded-full shadow-sm"></div>
                             : null
                     )
                 }
                 <div
                     className={
                         (this.state.showTitle ? " visible " : " invisible ") +
-                        " w-max py-0.5 px-1.5 absolute top-1.5 left-full ml-3 m-1 text-ubt-grey text-opacity-90 text-sm bg-ub-grey bg-opacity-70 border-gray-400 border border-opacity-40 rounded-md"
+                        " w-max py-0.5 px-2 absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 text-gray-100 font-medium text-xs bg-gray-800 bg-opacity-80 backdrop-blur-md rounded-md shadow-lg z-50 whitespace-nowrap"
                     }
                 >
                     {this.props.title}
