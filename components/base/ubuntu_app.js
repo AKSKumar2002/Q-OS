@@ -5,7 +5,9 @@ export class UbuntuApp extends Component {
     constructor(props) {
         super(props);
         this.state = {
-            isDragged: false
+            isDragged: false,
+            showContextMenu: false,
+            menuPosition: { x: 0, y: 0 }
         };
     }
 
@@ -24,10 +26,37 @@ export class UbuntuApp extends Component {
         localStorage.setItem('desktopAppPositions', JSON.stringify(savedPositions));
     }
 
+    handleContextMenu = (e) => {
+        if (this.props.onContextMenu) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.props.onContextMenu(e, this.props.id);
+        }
+    }
+
     render() {
         // Get saved position from localStorage
         const savedPositions = JSON.parse(localStorage.getItem('desktopAppPositions') || '{}');
         const savedPos = savedPositions[this.props.id];
+
+        // Determine if this is a desktop app or menu app
+        const isDesktopApp = this.props.isDesktop;
+
+        // If not a desktop app, render without Draggable
+        if (!isDesktopApp) {
+            return (
+                <div
+                    className="p-1 m-px z-10 bg-white bg-opacity-0 hover:bg-opacity-20 focus:bg-ub-orange focus:bg-opacity-50 focus:border-yellow-700 focus:border-opacity-100 border border-transparent outline-none rounded select-none w-24 h-20 flex flex-col justify-start items-center text-center text-xs font-normal text-white cursor-pointer"
+                    id={"app-" + this.props.id}
+                    onDoubleClick={this.openApp}
+                    onContextMenu={this.handleContextMenu}
+                    tabIndex={0}
+                >
+                    <img width="40px" height="40px" className="mb-1 w-10 pointer-events-none" src={this.props.icon} alt={"Ubuntu " + this.props.name} />
+                    {this.props.name}
+                </div>
+            );
+        }
 
         return (
             <Draggable
@@ -38,9 +67,10 @@ export class UbuntuApp extends Component {
                 disabled={false}
             >
                 <div
-                    className={`p-1 m-px z-10 bg-white bg-opacity-0 hover:bg-opacity-20 focus:bg-ub-orange focus:bg-opacity-50 focus:border-yellow-700 focus:border-opacity-100 border border-transparent outline-none rounded select-none w-24 h-20 flex flex-col justify-start items-center text-center text-xs font-normal text-white ${savedPos ? 'absolute cursor-move' : 'cursor-pointer'}`}
+                    className={`p-1 m-px z-10 bg-white bg-opacity-0 hover:bg-opacity-20 focus:bg-ub-orange focus:bg-opacity-50 focus:border-yellow-700 focus:border-opacity-100 border border-transparent outline-none rounded select-none w-24 h-20 flex flex-col justify-start items-center text-center text-xs font-normal text-white ${savedPos ? 'absolute cursor-move' : 'cursor-move'}`}
                     id={"app-" + this.props.id}
                     onDoubleClick={this.openApp}
+                    onContextMenu={this.handleContextMenu}
                     tabIndex={0}
                 >
                     <img width="40px" height="40px" className="mb-1 w-10 pointer-events-none" src={this.props.icon} alt={"Ubuntu " + this.props.name} />

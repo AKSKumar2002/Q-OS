@@ -10,6 +10,31 @@ import DefaultMenu from '../context menus/default';
 import $ from 'jquery';
 import ReactGA from 'react-ga';
 
+// App Context Menu Component
+function AppContextMenu({ active, appId, isOnDesktop, addToDesktop, removeFromDesktop }) {
+    const handleAddToDesktop = () => {
+        if (appId) addToDesktop(appId);
+    };
+
+    const handleRemoveFromDesktop = () => {
+        if (appId) removeFromDesktop(appId);
+    };
+
+    return (
+        <div id="app-menu" className={(active ? " block " : " hidden ") + " cursor-default w-52 context-menu-bg border text-left font-light border-gray-900 rounded text-white py-2 absolute z-50 text-sm"}>
+            {!isOnDesktop ? (
+                <div onClick={handleAddToDesktop} className="w-full py-1.5 px-4 hover:bg-ub-warm-grey hover:bg-opacity-20">
+                    <span>Add to Desktop</span>
+                </div>
+            ) : (
+                <div onClick={handleRemoveFromDesktop} className="w-full py-1.5 px-4 hover:bg-ub-warm-grey hover:bg-opacity-20">
+                    <span>Remove from Desktop</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export class Desktop extends Component {
     constructor() {
         super();
@@ -29,7 +54,9 @@ export class Desktop extends Component {
             context_menus: {
                 desktop: false,
                 default: false,
+                app: false,
             },
+            selectedAppId: null,
             showNameBar: false,
         }
     }
@@ -68,6 +95,15 @@ export class Desktop extends Component {
             });
             this.updateAppsData();
         }
+
+        // Load desktop apps from localStorage
+        const savedDesktopApps = JSON.parse(localStorage.getItem('desktop_apps') || '[]');
+        savedDesktopApps.forEach(appId => {
+            const app = apps.find(a => a.id === appId);
+            if (app) {
+                app.desktop_shortcut = true;
+            }
+        });
     }
 
     setEventListeners = () => {
@@ -230,6 +266,61 @@ export class Desktop extends Component {
         this.initFavourite = { ...favourite_apps };
     }
 
+    addAppToDesktop = (appId) => {
+        // Find the app in the apps array
+        const app = apps.find(a => a.id === appId);
+        if (!app) return;
+
+        // Update the app's desktop_shortcut property
+        app.desktop_shortcut = true;
+
+        // Update desktop_apps state
+        if (!this.state.desktop_apps.includes(appId)) {
+            this.setState({
+                desktop_apps: [...this.state.desktop_apps, appId]
+            });
+        }
+
+        // Save to localStorage
+        const desktopApps = JSON.parse(localStorage.getItem('desktop_apps') || '[]');
+        if (!desktopApps.includes(appId)) {
+            desktopApps.push(appId);
+            localStorage.setItem('desktop_apps', JSON.stringify(desktopApps));
+        }
+    }
+
+    removeAppFromDesktop = (appId) => {
+        // Find the app in the apps array
+        const app = apps.find(a => a.id === appId);
+        if (!app) return;
+
+        // Update the app's desktop_shortcut property
+        app.desktop_shortcut = false;
+
+        // Update desktop_apps state
+        this.setState({
+            desktop_apps: this.state.desktop_apps.filter(id => id !== appId)
+        });
+
+        // Save to localStorage
+        const desktopApps = JSON.parse(localStorage.getItem('desktop_apps') || '[]');
+        localStorage.setItem('desktop_apps', JSON.stringify(desktopApps.filter(id => id !== appId)));
+
+        // Remove saved position
+        const savedPositions = JSON.parse(localStorage.getItem('desktopAppPositions') || '{}');
+        delete savedPositions[appId];
+        localStorage.setItem('desktopAppPositions', JSON.stringify(savedPositions));
+    }
+
+    handleAppContextMenu = (e, appId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.hideAllContextMenu();
+
+        this.setState({ selectedAppId: appId });
+        this.showContextMenu(e, "app");
+    }
+
     renderDesktopApps = () => {
         if (Object.keys(this.state.closed_windows).length === 0) return;
         let appsJsx = [];
@@ -240,7 +331,9 @@ export class Desktop extends Component {
                     name: app.title,
                     id: app.id,
                     icon: app.icon,
-                    openApp: this.openApp
+                    openApp: this.openApp,
+                    isDesktop: true,
+                    onContextMenu: this.handleAppContextMenu
                 }
 
                 appsJsx.push(
@@ -523,6 +616,13 @@ export class Desktop extends Component {
                 {/* Context Menus */}
                 <DesktopMenu active={this.state.context_menus.desktop} openApp={this.openApp} addNewFolder={this.addNewFolder} />
                 <DefaultMenu active={this.state.context_menus.default} />
+                <AppContextMenu
+                    active={this.state.context_menus.app}
+                    appId={this.state.selectedAppId}
+                    isOnDesktop={this.state.selectedAppId && this.state.desktop_apps.includes(this.state.selectedAppId)}
+                    addToDesktop={this.addAppToDesktop}
+                    removeFromDesktop={this.removeAppFromDesktop}
+                />
 
                 {/* Folder Input Name Bar */}
                 {
@@ -532,10 +632,14 @@ export class Desktop extends Component {
                     )
                 }
 
-                { this.state.allAppsView ?
-                    <AllApplications apps={apps}
-                        recentApps={this.app_stack}
-                        openApp={this.openApp} /> : null}
+                {this.state.allAppsView ?
+                    <div onClick={this.showAllApps}>
+                        <AllApplications apps={apps}
+                            recentApps={this.app_stack}
+                            openApp={this.openApp}
+                            onAppContextMenu={this.handleAppContextMenu}
+                            closeMenu={this.showAllApps} />
+                    </div> : null}
 
             </div>
         )
