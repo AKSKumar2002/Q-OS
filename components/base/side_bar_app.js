@@ -22,10 +22,10 @@ export class SideBarApp extends Component {
     }
 
     openApp = () => {
-        if (!this.props.isMinimized[this.id] && this.props.isClose[this.id]) {
+        if (!this.props.isMinimized[this.props.id] && this.props.isClose[this.props.id]) {
             this.scaleImage();
         }
-        this.props.openApp(this.id);
+        this.props.openApp(this.props.id);
         this.setState({ showTitle: false });
     };
 
@@ -46,7 +46,7 @@ export class SideBarApp extends Component {
                     this.setState({ showTitle: false });
                     // Optional: trigger onLeave() if you want snap-back behavior immediately
                 }}
-                className={(this.props.isClose[this.id] === false && this.props.isFocus[this.id] ? "bg-white bg-opacity-10 " : "") + " outline-none relative transition-all duration-200 ease-out transform rounded-xl m-1 flex justify-center items-center"}
+                className={(this.props.isClose[this.props.id] === false && this.props.isFocus[this.props.id] ? "bg-white bg-opacity-10 " : "") + " outline-none relative transition-all duration-200 ease-out transform rounded-xl m-1 flex justify-center items-center"}
                 id={"sidebar-" + this.props.id}
                 style={{ width: `${size}px`, height: `${size}px` }}
             >
@@ -60,7 +60,7 @@ export class SideBarApp extends Component {
 
                 {
                     (
-                        this.props.isClose[this.id] === false
+                        this.props.isClose[this.props.id] === false
                             ? <div className=" w-1.5 h-1.5 absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-gray-200 rounded-full shadow-sm"></div>
                             : null
                     )
