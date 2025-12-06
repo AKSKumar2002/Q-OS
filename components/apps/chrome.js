@@ -7,8 +7,8 @@ export class Chrome extends Component {
         this.iframeRefs = {};
 
         // Proxy server configuration
-        // Change this to your deployed proxy URL or keep localhost for development
-        this.proxyUrl = 'http://localhost:3001/proxy?url=';
+        // Using public CORS proxy - works immediately, no setup needed!
+        this.proxyUrl = 'https://corsproxy.io/?';
         this.useProxy = true; // Set to false to disable proxy
 
         this.state = {
