@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import Calendar from './calendar';
 
 export default class Clock extends Component {
     constructor() {
@@ -11,18 +12,31 @@ export default class Clock extends Component {
         };
     }
 
+    toggleCalendar = () => {
+        this.setState(prevState => ({ calendarVisible: !prevState.calendarVisible }));
+    }
+
+    handleClickOutside = (e) => {
+        if (this.clockRef && !this.clockRef.contains(e.target)) {
+            this.setState({ calendarVisible: false });
+        }
+    }
+
     componentDidMount() {
         this.update_time = setInterval(() => {
             this.setState({ current_time: new Date() });
         }, 10 * 1000);
+        document.addEventListener('mousedown', this.handleClickOutside);
     }
 
     componentWillUnmount() {
         clearInterval(this.update_time);
+        document.removeEventListener('mousedown', this.handleClickOutside);
     }
 
     render() {
-        const { current_time } = this.state;
+        const { current_time, calendarVisible } = this.state;
+        // ... (existing variable definitions logic remains same if I don't touch lines 27-39, but I am replacing render block)
 
         let day = this.day_list[current_time.getDay()];
         let hour = current_time.getHours();
@@ -45,6 +59,14 @@ export default class Clock extends Component {
             display_time = day + " " + month + " " + date;
         }
         else display_time = day + " " + month + " " + date + " " + hour + ":" + minute + " " + meridiem;
-        return <span>{display_time}</span>;
+
+        return (
+            <div ref={node => this.clockRef = node} className="relative flex items-center justify-center">
+                <span onClick={this.toggleCalendar} className="cursor-pointer hover:bg-white hover:bg-opacity-10 px-2 rounded transition-colors duration-200">
+                    {display_time}
+                </span>
+                {calendarVisible && <Calendar />}
+            </div>
+        );
     }
 }

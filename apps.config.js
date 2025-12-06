@@ -18,7 +18,7 @@ const apps = [
         icon: './themes/Yaru/apps/chrome.png',
         disabled: false,
         favourite: true,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayChrome,
     },
     {
@@ -27,7 +27,7 @@ const apps = [
         icon: './themes/Yaru/apps/candy-fiesta.png',
         disabled: false,
         favourite: true,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayCandy,
     },
     {
@@ -45,7 +45,7 @@ const apps = [
         icon: './themes/Yaru/apps/cricket_gunda.png',
         disabled: false,
         favourite: false,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayCricket,
     },
     {
@@ -54,7 +54,7 @@ const apps = [
         icon: './themes/Yaru/system/user-home.png',
         disabled: false,
         favourite: true,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayAboutAnurag,
     },
     {
@@ -99,7 +99,7 @@ const apps = [
         icon: './themes/Yaru/system/user-trash-full.png',
         disabled: false,
         favourite: false,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayTrash,
     },
     {
@@ -108,7 +108,7 @@ const apps = [
         icon: './themes/Yaru/apps/gedit.png',
         disabled: false,
         favourite: false,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayGedit,
     },
     {
@@ -117,7 +117,7 @@ const apps = [
         icon: './themes/Yaru/apps/nosleep.png',
         disabled: false,
         favourite: true,
-        desktop_shortcut: true,
+        desktop_shortcut: false,
         screen: displayNoSleep,
     },
 ]
