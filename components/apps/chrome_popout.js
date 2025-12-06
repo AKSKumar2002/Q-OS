@@ -137,14 +137,9 @@ export class ChromePopout extends Component {
     }
 
     openInPopout = (url, tabId) => {
-        // Close existing popout for this tab if any
-        if (this.popoutWindows[tabId]) {
-            try {
-                this.popoutWindows[tabId].close();
-            } catch (e) { }
-        }
+        console.log(`[CHROME POPOUT] Opening ${url} in new window/tab`);
 
-        // Open in a new window
+        // Try opening in a pop-up window first
         const width = 1200;
         const height = 800;
         const left = window.screenX + 100;
@@ -152,8 +147,24 @@ export class ChromePopout extends Component {
 
         const features = `width=${width},height=${height},left=${left},top=${top},toolbar=yes,location=yes,directories=no,status=yes,menubar=no,scrollbars=yes,resizable=yes`;
 
-        const popout = window.open(url, `chrome-popout-${tabId}`, features);
-        this.popoutWindows[tabId] = popout;
+        let popout = null;
+        try {
+            popout = window.open(url, `chrome-popout-${tabId}`, features);
+        } catch (e) {
+            console.error('[CHROME POPOUT] Error opening window:', e);
+        }
+
+        // Check if window was blocked or failed to open
+        if (!popout || popout.closed || typeof popout.closed === 'undefined') {
+            console.log('[CHROME POPOUT] Pop-up blocked, opening in new tab instead');
+            // If pop-up blocked, just open in new tab (browsers don't block this)
+            popout = window.open(url, '_blank');
+        }
+
+        // Store reference
+        if (popout) {
+            this.popoutWindows[tabId] = popout;
+        }
 
         // Update tab to show it's in popout mode
         this.updateTab(tabId, {
@@ -163,10 +174,7 @@ export class ChromePopout extends Component {
             title: new URL(url).hostname
         });
 
-        // Check if window was blocked
-        if (!popout || popout.closed || typeof popout.closed === 'undefined') {
-            alert('Pop-up was blocked! Please allow pop-ups for this site.');
-        }
+        console.log('[CHROME POPOUT] Window opened successfully!');
     }
 
     // [Rest of the methods from the original Chrome component...]
@@ -323,8 +331,8 @@ export class ChromePopout extends Component {
                         key={tab.id}
                         onClick={() => this.switchTab(tab.id)}
                         className={`flex items-center px-3 py-1.5 border-r border-gray-700 cursor-pointer min-w-max max-w-xs ${tab.id === this.state.activeTabId
-                                ? 'bg-ub-cool-grey text-white'
-                                : 'bg-ub-grey text-gray-400 hover:bg-gray-800'
+                            ? 'bg-ub-cool-grey text-white'
+                            : 'bg-ub-grey text-gray-400 hover:bg-gray-800'
                             }`}
                     >
                         {tab.isPopout && <span className="mr-1">🔵</span>}
@@ -359,8 +367,8 @@ export class ChromePopout extends Component {
                     onClick={this.goBack}
                     disabled={!canGoBack}
                     className={`p-1.5 rounded-full ${canGoBack
-                            ? 'hover:bg-gray-700 cursor-pointer'
-                            : 'opacity-30 cursor-not-allowed'
+                        ? 'hover:bg-gray-700 cursor-pointer'
+                        : 'opacity-30 cursor-not-allowed'
                         }`}
                     title="Back"
                 >
@@ -373,8 +381,8 @@ export class ChromePopout extends Component {
                     onClick={this.goForward}
                     disabled={!canGoForward}
                     className={`p-1.5 rounded-full ${canGoForward
-                            ? 'hover:bg-gray-700 cursor-pointer'
-                            : 'opacity-30 cursor-not-allowed'
+                        ? 'hover:bg-gray-700 cursor-pointer'
+                        : 'opacity-30 cursor-not-allowed'
                         }`}
                     title="Forward"
                 >
