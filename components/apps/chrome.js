@@ -7,8 +7,8 @@ export class Chrome extends Component {
         this.iframeRefs = {};
 
         // Proxy server configuration
-        // Using public CORS proxy - works immediately, no setup needed!
-        this.proxyUrl = 'https://corsproxy.io/?';
+        // Using AllOrigins - reliable public CORS proxy for iframe embedding
+        this.proxyUrl = 'https://api.allorigins.win/raw?url=';
         this.useProxy = true; // Set to false to disable proxy
 
         this.state = {
@@ -110,6 +110,8 @@ export class Chrome extends Component {
             ? this.proxyUrl + encodeURIComponent(processedUrl)
             : processedUrl;
 
+        console.log(`[CHROME] Final URL being loaded: ${finalUrl}`);
+
         this.updateTab(targetTabId, {
             url: finalUrl,
             display_url: processedUrl, // Show the real URL in the address bar
@@ -147,8 +149,15 @@ export class Chrome extends Component {
                 'quora.com'
             ];
 
-            return blockedSites.some(site => hostname.includes(site));
+            const shouldProxy = blockedSites.some(site => hostname.includes(site));
+
+            console.log(`[CHROME] URL: ${url}`);
+            console.log(`[CHROME] Hostname: ${hostname}`);
+            console.log(`[CHROME] Using proxy: ${shouldProxy}`);
+
+            return shouldProxy;
         } catch (e) {
+            console.error('[CHROME] Error in shouldUseProxy:', e);
             return false;
         }
     }
