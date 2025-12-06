@@ -2,7 +2,7 @@ import displaySpotify from './components/apps/spotify';
 import displayVsCode from './components/apps/vscode';
 import { displayTerminal } from './components/apps/terminal';
 import { displaySettings } from './components/apps/settings';
-import { displayChrome } from './components/apps/chrome';
+import { displayChromePopout as displayChrome } from './components/apps/chrome_popout';
 import displayCandy from './components/apps/candy';
 import { displayTrash } from './components/apps/trash';
 import { displayGedit } from './components/apps/gedit';
