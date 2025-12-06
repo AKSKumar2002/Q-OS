@@ -4,6 +4,7 @@ export class Chrome extends Component {
     constructor() {
         super();
         this.home_url = 'https://www.google.com/webhp?igu=1';
+        this.iframeRefs = {};
         this.state = {
             tabs: [
                 {
@@ -13,6 +14,7 @@ export class Chrome extends Component {
                     title: "Google",
                     history: ['https://www.google.com/webhp?igu=1'],
                     historyIndex: 0,
+                    loadError: false,
                 }
             ],
             activeTabId: 1,
@@ -102,7 +104,8 @@ export class Chrome extends Component {
             display_url: processedUrl,
             history: newHistory,
             historyIndex: newHistory.length - 1,
-            title: new URL(processedUrl).hostname
+            title: new URL(processedUrl).hostname,
+            loadError: false, // Reset error state on new navigation
         });
     }
 
@@ -155,6 +158,7 @@ export class Chrome extends Component {
             title: "New Tab",
             history: [this.home_url],
             historyIndex: 0,
+            loadError: false,
         };
 
         this.setState(prevState => ({
@@ -242,8 +246,8 @@ export class Chrome extends Component {
                         key={tab.id}
                         onClick={() => this.switchTab(tab.id)}
                         className={`flex items-center px-3 py-1.5 border-r border-gray-700 cursor-pointer min-w-max max-w-xs ${tab.id === this.state.activeTabId
-                                ? 'bg-ub-cool-grey text-white'
-                                : 'bg-ub-grey text-gray-400 hover:bg-gray-800'
+                            ? 'bg-ub-cool-grey text-white'
+                            : 'bg-ub-grey text-gray-400 hover:bg-gray-800'
                             }`}
                     >
                         <span className="text-xs truncate mr-2 max-w-[150px]">{tab.title}</span>
@@ -278,8 +282,8 @@ export class Chrome extends Component {
                     onClick={this.goBack}
                     disabled={!canGoBack}
                     className={`p-1.5 rounded-full ${canGoBack
-                            ? 'hover:bg-gray-700 cursor-pointer'
-                            : 'opacity-30 cursor-not-allowed'
+                        ? 'hover:bg-gray-700 cursor-pointer'
+                        : 'opacity-30 cursor-not-allowed'
                         }`}
                     title="Back"
                 >
@@ -293,8 +297,8 @@ export class Chrome extends Component {
                     onClick={this.goForward}
                     disabled={!canGoForward}
                     className={`p-1.5 rounded-full ${canGoForward
-                            ? 'hover:bg-gray-700 cursor-pointer'
-                            : 'opacity-30 cursor-not-allowed'
+                        ? 'hover:bg-gray-700 cursor-pointer'
+                        : 'opacity-30 cursor-not-allowed'
                         }`}
                     title="Forward"
                 >
@@ -360,6 +364,19 @@ export class Chrome extends Component {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </button>
+
+                {/* Manual site blocked button */}
+                {tab && !tab.loadError && (
+                    <button
+                        onClick={() => this.updateTab(tab.id, { loadError: true })}
+                        className="p-1.5 rounded-full hover:bg-gray-700 ml-1 text-gray-400 hover:text-orange-400"
+                        title="Site not loading? Click here"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+                )}
             </div>
         );
     }
@@ -388,6 +405,68 @@ export class Chrome extends Component {
         );
     }
 
+    handleIframeError = (tabId) => {
+        console.log("Iframe load error detected for tab:", tabId);
+        this.updateTab(tabId, { loadError: true });
+    }
+
+    openInNewTab = (url) => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    renderErrorOverlay = (tab) => {
+        if (!tab.loadError) return null;
+
+        const hostname = new URL(tab.url).hostname;
+
+        return (
+            <div className="absolute inset-0 flex items-center justify-center bg-white p-8">
+                <div className="max-w-md text-center">
+                    <div className="mb-6">
+                        <svg className="w-20 h-20 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-3">
+                        {hostname} refused to connect
+                    </h2>
+                    <p className="text-gray-600 mb-2">
+                        This website doesn't allow being embedded in frames for security reasons (X-Frame-Options / CSP).
+                    </p>
+                    <p className="text-sm text-gray-500 mb-6">
+                        Many sites like <strong>Reddit, Facebook, Twitter, Instagram</strong> block iframe embedding to prevent clickjacking attacks.
+                    </p>
+
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => this.openInNewTab(tab.url)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            Open in New Browser Tab
+                        </button>
+
+                        <button
+                            onClick={this.goToHome}
+                            className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-6 rounded-lg transition-colors"
+                        >
+                            Go to Google
+                        </button>
+                    </div>
+
+                    <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm font-semibold text-green-800 mb-2">✅ These sites work well:</p>
+                        <p className="text-xs text-green-700">
+                            Google, YouTube, Wikipedia, GitHub, Stack Overflow, BBC, CNN, and many more!
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     render() {
         const activeTab = this.getActiveTab();
 
@@ -399,18 +478,24 @@ export class Chrome extends Component {
 
                 <div className="flex-grow relative">
                     {this.state.tabs.map(tab => (
-                        <iframe
+                        <div
                             key={tab.id}
-                            id={`chrome-iframe-${tab.id}`}
-                            src={tab.url}
-                            className={`absolute inset-0 w-full h-full ${tab.id === this.state.activeTabId ? 'block' : 'hidden'
-                                }`}
-                            frameBorder="0"
-                            title={`Browser Tab - ${tab.title}`}
-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads allow-modals allow-popups-to-escape-sandbox"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            allowFullScreen
-                        />
+                            className={`absolute inset-0 ${tab.id === this.state.activeTabId ? 'block' : 'hidden'}`}
+                        >
+                            <iframe
+                                ref={(ref) => this.iframeRefs[tab.id] = ref}
+                                id={`chrome-iframe-${tab.id}`}
+                                src={tab.url}
+                                className="w-full h-full"
+                                frameBorder="0"
+                                title={`Browser Tab - ${tab.title}`}
+                                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads allow-modals allow-popups-to-escape-sandbox"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
+                                onError={() => this.handleIframeError(tab.id)}
+                            />
+                            {this.renderErrorOverlay(tab)}
+                        </div>
                     ))}
                 </div>
             </div>
