@@ -5,6 +5,12 @@ export class Chrome extends Component {
         super();
         this.home_url = 'https://www.google.com/webhp?igu=1';
         this.iframeRefs = {};
+
+        // Proxy server configuration
+        // Change this to your deployed proxy URL or keep localhost for development
+        this.proxyUrl = 'http://localhost:3001/proxy?url=';
+        this.useProxy = true; // Set to false to disable proxy
+
         this.state = {
             tabs: [
                 {
@@ -99,14 +105,88 @@ export class Chrome extends Component {
         // Add to history
         const newHistory = [...tab.history.slice(0, tab.historyIndex + 1), processedUrl];
 
+        // Determine if we should use proxy for this URL
+        const finalUrl = this.shouldUseProxy(processedUrl)
+            ? this.proxyUrl + encodeURIComponent(processedUrl)
+            : processedUrl;
+
         this.updateTab(targetTabId, {
-            url: processedUrl,
-            display_url: processedUrl,
+            url: finalUrl,
+            display_url: processedUrl, // Show the real URL in the address bar
             history: newHistory,
             historyIndex: newHistory.length - 1,
             title: new URL(processedUrl).hostname,
             loadError: false, // Reset error state on new navigation
         });
+
+        // Still check for blocking (in case proxy is disabled or fails)
+        if (!this.shouldUseProxy(processedUrl)) {
+            setTimeout(() => {
+                this.checkIfSiteIsBlocked(targetTabId, processedUrl);
+            }, 2000);
+        }
+    }
+
+    shouldUseProxy = (url) => {
+        if (!this.useProxy) return false;
+
+        try {
+            const hostname = new URL(url).hostname.toLowerCase();
+
+            // List of sites that need proxy
+            const blockedSites = [
+                'reddit.com',
+                'facebook.com',
+                'twitter.com',
+                'x.com',
+                'instagram.com',
+                'linkedin.com',
+                'tiktok.com',
+                'pinterest.com',
+                'medium.com',
+                'quora.com'
+            ];
+
+            return blockedSites.some(site => hostname.includes(site));
+        } catch (e) {
+            return false;
+        }
+    }
+
+    checkIfSiteIsBlocked = (tabId, url) => {
+        try {
+            const hostname = new URL(url).hostname.toLowerCase();
+
+            // List of commonly blocked sites
+            const blockedSites = [
+                'reddit.com', 'www.reddit.com',
+                'facebook.com', 'www.facebook.com',
+                'twitter.com', 'www.twitter.com', 'x.com',
+                'instagram.com', 'www.instagram.com',
+                'linkedin.com', 'www.linkedin.com',
+                'tiktok.com', 'www.tiktok.com',
+                'pinterest.com', 'www.pinterest.com'
+            ];
+
+            // If it's a known blocked site, show error immediately
+            if (blockedSites.some(site => hostname.includes(site))) {
+                const iframe = this.iframeRefs[tabId];
+                if (iframe) {
+                    try {
+                        // Try to access iframe document - will throw error if CSP blocked
+                        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                        if (!doc || doc.location.href === 'about:blank') {
+                            this.updateTab(tabId, { loadError: true });
+                        }
+                    } catch (e) {
+                        // CSP or cross-origin error - site is blocked
+                        this.updateTab(tabId, { loadError: true });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error checking if site is blocked:", e);
+        }
     }
 
     goBack = () => {
@@ -431,10 +511,10 @@ export class Chrome extends Component {
                         {hostname} refused to connect
                     </h2>
                     <p className="text-gray-600 mb-2">
-                        This website doesn't allow being embedded in frames for security reasons (X-Frame-Options / CSP).
+                        This website blocks iframe embedding using <strong>Content Security Policy (CSP)</strong> with the <code className="bg-gray-100 px-1 rounded">frame-ancestors</code> directive.
                     </p>
                     <p className="text-sm text-gray-500 mb-6">
-                        Many sites like <strong>Reddit, Facebook, Twitter, Instagram</strong> block iframe embedding to prevent clickjacking attacks.
+                        Sites like <strong>Reddit, Facebook, Twitter, Instagram, LinkedIn</strong> use this security feature to prevent clickjacking attacks and unauthorized embedding.
                     </p>
 
                     <div className="space-y-3">
