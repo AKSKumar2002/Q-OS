@@ -1,6 +1,6 @@
 import * as React from "react";
-import { useNavigate } from "react-router";
-import AccountingApp from "../../erp modules/Kriti-CRM/src/app/AccountingApp";
+import { useNavigate } from 'react-router';
+import FinanceApp from "../../erp modules/Finance-ERP/src/app/FinanceApp";
 
 export default function AccountingPage() {
     const navigate = useNavigate();
@@ -15,10 +15,9 @@ export default function AccountingPage() {
 
     return (
         <div className="h-screen w-full bg-slate-50 overflow-hidden">
-            <AccountingApp
+            <FinanceApp
                 onBackToWorkspace={() => navigate("/workspace")}
-                initialUser={{ name: user.name, role: user.role || 'Chief Accountant' }}
-                skipLoader={false}
+                initialUser={{ name: user.name, role: user.role || 'CFO' }}
             />
         </div>
     );

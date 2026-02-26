@@ -87,7 +87,7 @@ const apps: App[] = [
   },
   {
     id: 'finance',
-    title: 'Accounting',
+    title: 'Finance',
     icon: <DollarSign className="w-8 h-8" strokeWidth={2.5} />,
     color: '#26A69A', // Greenish Teal
     modules: ['Accounts', 'Journal', 'AR/AP', 'GST/Tax', 'Reports', 'Budget']
