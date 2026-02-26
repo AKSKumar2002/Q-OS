@@ -1227,11 +1227,17 @@ export default function Projects() {
             let projData = projSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => !p.deleted_at);
 
             // Filter for Project Managers: Only show projects allocated to them
-            const savedUserStr = localStorage.getItem('alphery_user');
-            if (savedUserStr) {
-                const sUser = JSON.parse(savedUserStr);
-                if (sUser.role === 'Project Manager') {
-                    projData = projData.filter((p: any) => p.allocated_to === sUser.username);
+            const storedUser = localStorage.getItem('alphery_user');
+            if (storedUser) {
+                const sUser = JSON.parse(storedUser);
+                const isPM = (sUser.role === 'Project Manager' || sUser.designation === 'Project Manager');
+                const isAdmin = sUser.level === 'L0' || sUser.level === 'L1' || sUser.role === 'Super Admin';
+
+                if (isPM && !isAdmin) {
+                    projData = projData.filter((p: any) => {
+                        if (!p.allocated_to || !sUser.username) return false;
+                        return p.allocated_to.toString().trim().toLowerCase() === sUser.username.toString().trim().toLowerCase();
+                    });
                 }
             }
             const taskData = taskSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((t: any) => !t.deleted_at);
