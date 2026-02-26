@@ -19,7 +19,30 @@ interface LayoutProps {
 
 export function Layout({ children, activeModule, setActiveModule, onLogout, onBackToWorkspace, user: currentUser, navigation }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+  const [moduleHistory, setModuleHistory] = React.useState<ModuleId[]>([]);
+  const prevModuleRef = React.useRef<ModuleId>(activeModule);
   const navStructure = navigation || NAVIGATION_STRUCTURE;
+
+  React.useEffect(() => {
+    if (prevModuleRef.current !== activeModule) {
+      const prev = prevModuleRef.current;
+      setModuleHistory(prevHistory => [...prevHistory, prev]);
+      prevModuleRef.current = activeModule;
+    }
+  }, [activeModule]);
+
+  const handleBack = () => {
+    if (moduleHistory.length > 0) {
+      const prev = moduleHistory[moduleHistory.length - 1];
+      // When going back, we don't want the effect to add the current module to history again
+      // So we update the ref to the destination before changing the state
+      prevModuleRef.current = prev;
+      setModuleHistory(prevHistory => prevHistory.slice(0, -1));
+      setActiveModule(prev);
+    } else if (onBackToWorkspace) {
+      onBackToWorkspace();
+    }
+  };
 
   // Simulated alphery hooks/state
   const tenant = {
@@ -112,11 +135,11 @@ export function Layout({ children, activeModule, setActiveModule, onLogout, onBa
             {onBackToWorkspace && (
               <Button
                 variant="ghost"
-                onClick={onBackToWorkspace}
+                onClick={handleBack}
                 className="bg-[#667EEA]/10 text-[#667EEA] hover:bg-[#667EEA]/20 rounded-xl px-4 h-10 font-bold flex items-center gap-2 transition-all"
               >
                 <ChevronRight className="rotate-180 size-4" />
-                Workspace
+                {moduleHistory.length > 0 ? "Back" : "Workspace"}
               </Button>
             )}
             <div className="relative group min-w-[320px]">

@@ -547,6 +547,14 @@ export default function Communication() {
         return 'D';
     };
 
+    const handleBack = () => {
+        if (activeConversation) {
+            setActiveConversation(null);
+            return;
+        }
+        navigate('/workspace');
+    };
+
     // --- RENDER ---
     return (
         <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans text-gray-900 border-t border-white/5">
@@ -561,7 +569,7 @@ export default function Communication() {
                 setShowCreateGroupModal={setShowCreateGroupModal}
                 currentUser={currentUser}
                 allUsers={allUsers}
-                navigate={navigate}
+                navigate={handleBack}
                 onlineUsers={onlineUsers}
                 unreadCounts={unreadCounts}
                 currentStatus={currentStatus}

@@ -72,6 +72,14 @@ interface Project {
     created_at: string;
     created_by: string;
     tenant_id: string;
+    is_partially_paid?: boolean;
+    partially_paid_amount?: number;
+    start_date?: string;
+    end_date?: string;
+    completion_date?: string;
+    signed_by?: string;
+    allocated_to?: string;
+    client_name?: string;
 }
 
 // --- Sub-components (Fidelity Layer) ---
@@ -146,7 +154,10 @@ function DashboardView({ projects, stats, onProjectClick }: { projects: Project[
                                     </div>
                                     <div className="flex-1">
                                         <h4 className="font-bold text-gray-900 group-hover:text-[#7C1CE2] transition-colors">{p.name}</h4>
-                                        <p className="text-xs text-gray-500 truncate max-w-xs">{p.description || 'No description provided'}</p>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-[#7C1CE2] uppercase bg-purple-50 px-1.5 py-0.5 rounded">{p.client_name || 'No Client'}</span>
+                                            <p className="text-xs text-gray-500 truncate max-w-xs">{p.description || 'No description provided'}</p>
+                                        </div>
                                     </div>
                                     <div className="hidden md:block w-32">
                                         <div className="flex justify-between mb-1">
@@ -254,6 +265,7 @@ interface ProjectDetailViewProps {
     onAddMilestone: () => void;
     onToggleMilestone: (id: string, currentStatus: string) => void;
     onEditMilestone: (m: any) => void;
+    user?: any;
 }
 
 function ProjectDetailView({
@@ -270,8 +282,10 @@ function ProjectDetailView({
     milestones,
     onAddMilestone,
     onToggleMilestone,
-    onEditMilestone
+    onEditMilestone,
+    user
 }: ProjectDetailViewProps) {
+    const isPM = user?.role === 'Project Manager';
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-[#FBFBFE]">
             {/* Project Navigation */}
@@ -383,7 +397,7 @@ function ProjectDetailView({
                                         <button
                                             onClick={() => {
                                                 const currentRisks = Array.isArray(project.risks) ? project.risks : [];
-                                                const newRisks = [...currentRisks, { title: 'New Risk Factor', level: 'Medium' }];
+                                                const newRisks = [...currentRisks, { title: 'New Risk Factor', level: 'Medium', reason: 'Company', date: new Date().toISOString().split('T')[0] }];
                                                 (window as any).updateProjectField(project.id, 'risks', newRisks);
                                             }}
                                             className="p-2 hover:bg-gray-50 text-orange-500 rounded-lg transition-all"
@@ -407,7 +421,7 @@ function ProjectDetailView({
                                                         className="text-xs font-black text-gray-900 bg-transparent border-none p-0 w-full mb-1 focus:ring-0 placeholder-gray-300"
                                                         placeholder="Risk Title"
                                                     />
-                                                    <div className="flex justify-between items-center">
+                                                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                                                         <select
                                                             defaultValue={risk.level}
                                                             onChange={(e) => {
@@ -415,16 +429,55 @@ function ProjectDetailView({
                                                                 newRisks[idx] = { ...newRisks[idx], level: e.target.value };
                                                                 (window as any).updateProjectField(project.id, 'risks', newRisks);
                                                             }}
-                                                            className={`text-[9px] uppercase font-black bg-transparent border-none focus:ring-0 cursor-pointer p-0 ${risk.level === 'High' || risk.level === 'Critical' ? 'text-red-500' : 'text-orange-500'}`}
+                                                            className={`text-[9px] uppercase font-black bg-transparent border-none focus:ring-0 cursor-pointer p-0 shrink-0 ${risk.level === 'High' || risk.level === 'Critical' ? 'text-red-500' : 'text-orange-500'}`}
                                                         >
                                                             <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
                                                         </select>
+
+                                                        <select
+                                                            defaultValue={risk.reason || 'Company'}
+                                                            onChange={(e) => {
+                                                                const newRisks = [...(project.risks || [])];
+                                                                newRisks[idx] = { ...newRisks[idx], reason: e.target.value };
+                                                                (window as any).updateProjectField(project.id, 'risks', newRisks);
+                                                            }}
+                                                            className="text-[9px] uppercase font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border-none focus:ring-0 cursor-pointer shrink-0"
+                                                        >
+                                                            <option>From Client</option><option>From Company</option>
+                                                        </select>
+
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <input
+                                                                type="date"
+                                                                defaultValue={risk.date || ''}
+                                                                onBlur={(e) => {
+                                                                    const newRisks = [...(project.risks || [])];
+                                                                    newRisks[idx] = { ...newRisks[idx], date: e.target.value };
+                                                                    (window as any).updateProjectField(project.id, 'risks', newRisks);
+                                                                }}
+                                                                title="Identification Date"
+                                                                className="text-[9px] font-black text-gray-400 bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-20"
+                                                            />
+                                                            <span className="text-[8px] font-black text-gray-300">|</span>
+                                                            <input
+                                                                type="date"
+                                                                defaultValue={risk.completion_date || ''}
+                                                                onBlur={(e) => {
+                                                                    const newRisks = [...(project.risks || [])];
+                                                                    newRisks[idx] = { ...newRisks[idx], completion_date: e.target.value };
+                                                                    (window as any).updateProjectField(project.id, 'risks', newRisks);
+                                                                }}
+                                                                title="Resolution/Completion Date"
+                                                                className="text-[9px] font-black text-emerald-600 bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-20"
+                                                            />
+                                                        </div>
+
                                                         <button
                                                             onClick={() => {
                                                                 const newRisks = (project.risks || []).filter((_: any, i: number) => i !== idx);
                                                                 (window as any).updateProjectField(project.id, 'risks', newRisks);
                                                             }}
-                                                            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                                            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
                                                         >
                                                             <Trash2 className="w-3 h-3" />
                                                         </button>
@@ -499,9 +552,10 @@ function ProjectDetailView({
                                         <select
                                             defaultValue={project.type}
                                             onChange={(e) => (window as any).updateProjectField(project.id, 'type', e.target.value)}
-                                            className="font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] uppercase tracking-wide border-none focus:ring-0 cursor-pointer"
+                                            disabled={isPM}
+                                            className="font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] uppercase tracking-wide border-none focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
                                         >
-                                            <option>Internal</option><option>External</option><option>Product</option><option>Service</option>
+                                            <option>Internal</option><option>External</option><option>Vendor</option><option>Product</option><option>Service</option>
                                         </select>
                                     </div>
                                     <div className="flex justify-between items-center text-sm">
@@ -509,31 +563,35 @@ function ProjectDetailView({
                                         <select
                                             defaultValue={project.priority}
                                             onChange={(e) => (window as any).updateProjectField(project.id, 'priority', e.target.value)}
-                                            className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide border-none focus:ring-0 cursor-pointer ${project.priority === 'Critical' ? 'bg-red-50 text-red-600' : 'bg-purple-50 text-purple-600'
+                                            disabled={isPM}
+                                            className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide border-none focus:ring-0 cursor-pointer disabled:cursor-not-allowed ${project.priority === 'Critical' ? 'bg-red-50 text-red-600' : 'bg-purple-50 text-purple-600'
                                                 }`}
                                         >
                                             <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
                                         </select>
                                     </div>
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-400 font-medium">Budget</span>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="number"
-                                                defaultValue={project.budget_allocated}
-                                                onBlur={(e) => (window as any).updateProjectBudget(project.id, e.target.value)}
-                                                className="w-24 text-right font-bold text-gray-900 bg-gray-50 border-none rounded px-1 focus:ring-1 focus:ring-purple-200 outline-none transition-all"
-                                            />
-                                            <span className="text-[10px] font-black text-gray-400 uppercase">INR</span>
+                                    {!isPM && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400 font-medium">Budget</span>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    defaultValue={project.budget_allocated}
+                                                    onBlur={(e) => (window as any).updateProjectBudget(project.id, e.target.value)}
+                                                    className="w-24 text-right font-bold text-gray-900 bg-gray-50 border-none rounded px-1 focus:ring-1 focus:ring-purple-200 outline-none transition-all"
+                                                />
+                                                <span className="text-[10px] font-black text-gray-400 uppercase">INR</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-400 font-medium">Start Date</span>
                                         <input
                                             type="date"
                                             defaultValue={project.start_date || (project.created_at ? new Date(project.created_at).toISOString().split('T')[0] : '')}
                                             onBlur={(e) => (window as any).updateProjectField(project.id, 'start_date', e.target.value)}
-                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0 cursor-pointer"
+                                            disabled={isPM}
+                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
                                         />
                                     </div>
                                     <div className="flex justify-between items-center text-sm">
@@ -542,28 +600,58 @@ function ProjectDetailView({
                                             type="date"
                                             defaultValue={project.end_date || ''}
                                             onBlur={(e) => (window as any).updateProjectField(project.id, 'end_date', e.target.value)}
-                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0 cursor-pointer"
+                                            disabled={isPM}
+                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
                                         />
                                     </div>
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-400 font-medium">Paid Partially</span>
-                                        <button
-                                            onClick={() => (window as any).updateProjectField(project.id, 'is_partially_paid', !project.is_partially_paid)}
-                                            className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${project.is_partially_paid ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}
-                                        >
-                                            {project.is_partially_paid ? 'Yes' : 'No'}
-                                        </button>
+                                        <span className="text-gray-400 font-medium">Completion Date</span>
+                                        <input
+                                            type="date"
+                                            defaultValue={project.completion_date || ''}
+                                            onBlur={(e) => (window as any).updateProjectField(project.id, 'completion_date', e.target.value)}
+                                            disabled={isPM}
+                                            className="font-bold text-emerald-600 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
+                                        />
                                     </div>
+                                    {!isPM && (
+                                        <>
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-400 font-medium">Paid Partially</span>
+                                                <button
+                                                    onClick={() => (window as any).updateProjectField(project.id, 'is_partially_paid', !project.is_partially_paid)}
+                                                    className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${project.is_partially_paid ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}
+                                                >
+                                                    {project.is_partially_paid ? 'Yes' : 'No'}
+                                                </button>
+                                            </div>
+                                            {project.is_partially_paid && (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-400 font-medium">Commenced Amt</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="number"
+                                                            defaultValue={project.partially_paid_amount || 0}
+                                                            onBlur={(e) => (window as any).updateProjectField(project.id, 'partially_paid_amount', e.target.value)}
+                                                            className="w-20 text-right font-bold text-orange-600 bg-orange-50/50 border-none rounded px-1 focus:ring-1 focus:ring-orange-200 outline-none transition-all text-[10px]"
+                                                        />
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase">INR</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-400 font-medium">Signed By</span>
                                         <div className="flex items-center gap-2">
                                             <select
                                                 value={project.signed_by || ''}
                                                 onChange={(e) => (window as any).updateProjectField(project.id, 'signed_by', e.target.value)}
-                                                className="w-32 text-right font-bold text-gray-900 bg-transparent border-none p-0 text-[10px] focus:ring-0 cursor-pointer"
+                                                disabled={isPM}
+                                                className="w-32 text-right font-bold text-gray-900 bg-transparent border-none p-0 text-[10px] focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
                                             >
                                                 <option value="">Select Signatory</option>
-                                                {companyUsers.map((u: any) => (
+                                                {companyUsers.filter((u: any) => u.level === 'L0' || u.level === 'L1').map((u: any) => (
                                                     <option key={u.username} value={u.username}>
                                                         {u.name || u.username}
                                                     </option>
@@ -573,6 +661,37 @@ function ProjectDetailView({
                                                 <Users className="w-2.5 h-2.5" />
                                             </div>
                                         </div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-400 font-medium">Allocated To</span>
+                                        <div className="flex items-center gap-2">
+                                            <select
+                                                value={project.allocated_to || ''}
+                                                onChange={(e) => (window as any).updateProjectField(project.id, 'allocated_to', e.target.value)}
+                                                disabled={isPM}
+                                                className="w-32 text-right font-bold text-gray-900 bg-transparent border-none p-0 text-[10px] focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
+                                            >
+                                                <option value="">Select Lead</option>
+                                                {companyUsers.filter((u: any) => u.role === 'Project Manager').map((u: any) => (
+                                                    <option key={u.username} value={u.username}>
+                                                        {u.name || u.username}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div className="w-4 h-4 rounded bg-blue-100 text-[#0066FF] flex items-center justify-center" title={companyUsers.find(u => u.username === project.allocated_to)?.name || 'Unknown Lead'}>
+                                                <Users className="w-2.5 h-2.5" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-400 font-medium">Client Name</span>
+                                        <input
+                                            type="text"
+                                            defaultValue={project.client_name || ''}
+                                            onBlur={(e) => (window as any).updateProjectField(project.id, 'client_name', e.target.value)}
+                                            placeholder="Client Name"
+                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -1028,6 +1147,14 @@ function ProjectDetailView({
 export default function Projects() {
     const navigate = useNavigate();
     const [currentView, setCurrentView] = useState<ViewType>('dashboard');
+    const [viewHistory, setViewHistory] = useState<ViewType[]>([]);
+
+    const navigateToView = (view: ViewType) => {
+        if (view !== currentView) {
+            setViewHistory(prev => [...prev, currentView]);
+            setCurrentView(view);
+        }
+    };
     const [projects, setProjects] = useState<any[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [selectedProject, setSelectedProject] = useState<any | null>(null);
@@ -1042,7 +1169,7 @@ export default function Projects() {
     const [isSaving, setIsSaving] = useState(false);
     const [newProject, setNewProject] = useState({
         name: '', description: '', type: 'Internal', priority: 'Medium', budget: '0',
-        is_partially_paid: false, start_date: '', end_date: '', signed_by: ''
+        is_partially_paid: false, partially_paid_amount: '0', start_date: '', end_date: '', completion_date: '', signed_by: '', allocated_to: '', client_name: ''
     });
     const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'Medium', status: 'To Do', assignee: '' });
     const [newMilestone, setNewMilestone] = useState({ title: '', due_date: '' });
@@ -1073,10 +1200,8 @@ export default function Projects() {
             const response = await fetch(GS_API_URL, { method: 'POST', body: params, redirect: 'follow' });
             const data = await response.json();
             if (data.success) {
-                // Only allow L0 and L1 users to be signatories
                 const allUsers = data.user || [];
-                const authorizedSignatories = allUsers.filter((u: any) => u.level === 'L0' || u.level === 'L1');
-                setCompanyUsers(authorizedSignatories);
+                setCompanyUsers(allUsers);
             } else {
                 setCompanyUsers([]);
             }
@@ -1086,8 +1211,8 @@ export default function Projects() {
         }
     };
 
-    const loadData = async (tId: string) => {
-        setIsLoading(true);
+    const loadData = async (tId: string, silent = false) => {
+        if (!silent) setIsLoading(true);
         const savedUser = localStorage.getItem('alphery_user');
         const sheetName = savedUser ? JSON.parse(savedUser).company : tId;
         fetchCompanyUsers(sheetName || tId);
@@ -1099,7 +1224,16 @@ export default function Projects() {
 
             const [projSnap, taskSnap, mileSnap] = await Promise.all([getDocs(projQ), getDocs(taskQ), getDocs(mileQ)]);
 
-            const projData = projSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => !p.deleted_at);
+            let projData = projSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => !p.deleted_at);
+
+            // Filter for Project Managers: Only show projects allocated to them
+            const savedUserStr = localStorage.getItem('alphery_user');
+            if (savedUserStr) {
+                const sUser = JSON.parse(savedUserStr);
+                if (sUser.role === 'Project Manager') {
+                    projData = projData.filter((p: any) => p.allocated_to === sUser.username);
+                }
+            }
             const taskData = taskSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((t: any) => !t.deleted_at);
             const mileData = mileSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -1148,10 +1282,10 @@ export default function Projects() {
     (window as any).currentProjectTasks = tasks.filter(t => t.project_id === selectedProject?.id);
     (window as any).toggleTaskModal = (val: boolean) => setShowTaskModal(val);
     (window as any).updateTaskStatus = async (id: string, newStatus: string) => {
-        try { await updateDoc(doc(db, 'tasks', id), { status: newStatus }); loadData(tenantId!); } catch (err) { console.error(err); }
+        try { await updateDoc(doc(db, 'tasks', id), { status: newStatus }); loadData(tenantId!, true); } catch (err) { console.error(err); }
     };
     (window as any).deleteTask = async (id: string) => {
-        try { await updateDoc(doc(db, 'tasks', id), { deleted_at: new Date().toISOString() }); loadData(tenantId!); } catch (err) { console.error(err); }
+        try { await updateDoc(doc(db, 'tasks', id), { deleted_at: new Date().toISOString() }); loadData(tenantId!, true); } catch (err) { console.error(err); }
     };
     (window as any).updateTaskField = async (id: string, field: string, value: any) => {
         // Optimistic UI
@@ -1170,7 +1304,7 @@ export default function Projects() {
         }
     };
     (window as any).updateProjectBudget = async (id: string, budget: string) => {
-        try { await updateDoc(doc(db, 'projects', id), { budget_allocated: parseFloat(budget) }); loadData(tenantId!); } catch (err) { console.error(err); }
+        try { await updateDoc(doc(db, 'projects', id), { budget_allocated: parseFloat(budget) }); loadData(tenantId!, true); } catch (err) { console.error(err); }
     };
     (window as any).isEngineSaving = isSaving;
     (window as any).updateProjectField = async (id: string, field: string, value: any) => {
@@ -1180,7 +1314,8 @@ export default function Projects() {
             'alloc_project_mgmt', 'alloc_designing', 'alloc_developing', 'alloc_data_ai',
             'alloc_infra_devops', 'alloc_security_compliance', 'alloc_testing_qa', 'alloc_deployment_impl',
             'alloc_support_maint', 'alloc_sales_mktg', 'alloc_customer_success', 'alloc_hr',
-            'alloc_finance_accounts', 'alloc_legal_gov', 'alloc_procurement_admin', 'alloc_research_innovation'
+            'alloc_finance_accounts', 'alloc_legal_gov', 'alloc_procurement_admin', 'alloc_research_innovation',
+            'partially_paid_amount'
         ];
         const val = numericFields.includes(field) ? (Number(value) || 0) : value;
 
@@ -1228,7 +1363,7 @@ export default function Projects() {
             setTasks([...tasks, { id: newTaskRef.id, ...taskData } as any]);
             setShowTaskModal(false);
             setNewTask({ title: '', description: '', priority: 'Medium', status: 'To Do', assignee: '' });
-            loadData(tenantId);
+            loadData(tenantId, true);
         } finally { setIsSaving(false); }
     };
 
@@ -1245,9 +1380,13 @@ export default function Projects() {
                 tenant_id: tenantId,
                 created_by: user?.username || 'System',
                 is_partially_paid: newProject.is_partially_paid,
+                partially_paid_amount: parseFloat(newProject.partially_paid_amount) || 0,
                 start_date: newProject.start_date || null,
                 end_date: newProject.end_date || null,
+                completion_date: newProject.completion_date || null,
                 signed_by: newProject.signed_by,
+                allocated_to: newProject.allocated_to,
+                client_name: newProject.client_name,
                 created_at: new Date().toISOString(),
                 progress: 0
             };
@@ -1256,7 +1395,7 @@ export default function Projects() {
             setShowCreateModal(false);
             setNewProject({
                 name: '', description: '', type: 'Internal', priority: 'Medium', budget: '0',
-                is_partially_paid: false, start_date: '', end_date: '', signed_by: ''
+                is_partially_paid: false, partially_paid_amount: '0', start_date: '', end_date: '', completion_date: '', signed_by: '', allocated_to: '', client_name: ''
             });
         } catch (err) {
             alert('Error creating project. Check your Firebase connection.');
@@ -1306,7 +1445,7 @@ export default function Projects() {
             setShowMilestoneModal(false);
             setEditingMilestone(null);
             setNewMilestone({ title: '', due_date: '' });
-            loadData(tenantId!);
+            loadData(tenantId!, true);
         } catch (err) {
             console.error('Milestone Operation Error:', err);
         } finally {
@@ -1332,7 +1471,7 @@ export default function Projects() {
         setSelectedProject(p);
         // Important: Fetch users for THIS project's specific company (tenant_id)
         if (p.tenant_id) fetchCompanyUsers(p.tenant_id);
-        setCurrentView('project-detail');
+        navigateToView('project-detail');
         setProjectTab('overview');
     };
 
@@ -1356,7 +1495,21 @@ export default function Projects() {
                         <div className="w-8 h-8 rounded-lg bg-[#7C1CE2] flex items-center justify-center text-white shadow-lg shadow-purple-100"><Briefcase className="w-4 h-4" /></div>
                         <span className="font-black text-gray-900 tracking-tighter text-lg uppercase">Engine</span>
                     </div>
-                    <button onClick={() => navigate('/workspace')} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 group transition-all"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5" /></button>
+                    <button
+                        onClick={() => {
+                            if (viewHistory.length > 0) {
+                                const prev = viewHistory[viewHistory.length - 1];
+                                setViewHistory(prev => prev.slice(0, -1));
+                                setCurrentView(prev);
+                            } else {
+                                navigate('/workspace');
+                            }
+                        }}
+                        className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 group transition-all flex items-center gap-1.5"
+                    >
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{viewHistory.length > 0 ? 'Back' : 'Workspace'}</span>
+                    </button>
                 </div>
 
                 <div className="p-4">
@@ -1369,16 +1522,16 @@ export default function Projects() {
                 </div>
 
                 <nav className="flex-1 px-3 space-y-1 overflow-y-auto CustomScroll">
-                    <SidebarItem icon={<LayoutDashboard className="w-4 h-4" />} label="Project Summary" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
-                    <SidebarItem icon={<Layers className="w-4 h-4" />} label="Project Tracking" active={currentView === 'projects'} onClick={() => setCurrentView('projects')} />
-                    <SidebarItem icon={<CheckSquare className="w-4 h-4" />} label="My Execution" active={currentView === 'tasks'} onClick={() => setCurrentView('tasks')} />
-                    <SidebarItem icon={<Users className="w-4 h-4" />} label="Teams" active={currentView === 'workload'} onClick={() => setCurrentView('workload')} />
+                    <SidebarItem icon={<LayoutDashboard className="w-4 h-4" />} label="Project Summary" active={currentView === 'dashboard'} onClick={() => navigateToView('dashboard')} />
+                    <SidebarItem icon={<Layers className="w-4 h-4" />} label="Project Tracking" active={currentView === 'projects'} onClick={() => navigateToView('projects')} />
+                    <SidebarItem icon={<CheckSquare className="w-4 h-4" />} label="My Execution" active={currentView === 'tasks'} onClick={() => navigateToView('tasks')} />
+                    <SidebarItem icon={<Users className="w-4 h-4" />} label="Teams" active={currentView === 'workload'} onClick={() => navigateToView('workload')} />
 
                     <div className="my-6 mx-3 border-t border-gray-50 pt-4">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4">Insights</span>
                         <div className="mt-2 space-y-1">
-                            <SidebarItem icon={<BarChart3 className="w-4 h-4" />} label="Velocity Reports" active={currentView === 'reports'} onClick={() => setCurrentView('reports')} />
-                            <SidebarItem icon={<Settings className="w-4 h-4" />} label="Engine Config" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} />
+                            <SidebarItem icon={<BarChart3 className="w-4 h-4" />} label="Velocity Reports" active={currentView === 'reports'} onClick={() => navigateToView('reports')} />
+                            <SidebarItem icon={<Settings className="w-4 h-4" />} label="Engine Config" active={currentView === 'settings'} onClick={() => navigateToView('settings')} />
                         </div>
                     </div>
                 </nav>
@@ -1398,8 +1551,26 @@ export default function Projects() {
             <main className="flex-1 flex flex-col min-w-0 bg-[#FBFBFE] relative h-full">
                 <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0 z-30">
                     <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tighter">
-                            {currentView === 'project-detail' ? selectedProject?.name : currentView.replace('-', ' ')}
+                        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tighter flex items-center">
+                            {currentView === 'project-detail' ? (
+                                (user?.level === 'L0' || user?.level === 'L1') ? (
+                                    <input
+                                        type="text"
+                                        defaultValue={selectedProject?.name}
+                                        onBlur={(e) => {
+                                            if (e.target.value.trim() && e.target.value !== selectedProject?.name) {
+                                                (window as any).updateProjectField(selectedProject.id, 'name', e.target.value.trim());
+                                            }
+                                        }}
+                                        className="bg-transparent border-none text-xl font-black text-gray-900 uppercase tracking-tighter p-0 focus:ring-0 w-full outline-none"
+                                        placeholder="Track Name"
+                                    />
+                                ) : (
+                                    selectedProject?.name
+                                )
+                            ) : (
+                                currentView.replace('-', ' ')
+                            )}
                         </h2>
                         {currentView === 'project-detail' && (
                             <select
@@ -1450,6 +1621,7 @@ export default function Projects() {
                                 setNewMilestone({ title: m.title, due_date: m.due_date ? new Date(m.due_date).toISOString().split('T')[0] : '' });
                                 setShowMilestoneModal(true);
                             }}
+                            user={user}
                         />
                     )}
 
@@ -1462,7 +1634,8 @@ export default function Projects() {
                                             <th className="px-6 py-5">Track Name</th>
                                             <th className="px-6 py-5">Status</th>
                                             <th className="px-6 py-5">Category</th>
-                                            <th className="px-6 py-5">Leader</th>
+                                            <th className="px-6 py-5">Client</th>
+                                            <th className="px-6 py-5">Allocated To</th>
                                             <th className="px-6 py-5">Budget</th>
                                             <th className="px-6 py-5 text-right">Action</th>
                                         </tr>
@@ -1480,7 +1653,8 @@ export default function Projects() {
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>{p.status}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-xs font-bold text-gray-500">{p.type}</td>
-                                                <td className="px-6 py-4 text-xs font-bold text-gray-700">{p.created_by}</td>
+                                                <td className="px-6 py-4 text-xs font-bold text-[#7C1CE2]">{p.client_name || 'N/A'}</td>
+                                                <td className="px-6 py-4 text-xs font-bold text-gray-700">{p.allocated_to || 'N/A'}</td>
                                                 <td className="px-6 py-4 text-xs font-black text-gray-900">₹{Number(p.budget_allocated).toLocaleString('en-IN')}</td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
@@ -1724,9 +1898,15 @@ export default function Projects() {
                                         <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">Add New Project</h3>
                                     </div>
                                     <div className="space-y-6">
-                                        <div>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Project Name</label>
-                                            <input type="text" placeholder="e.g. Q1 Global Growth" value={newProject.name} onChange={e => setNewProject({ ...newProject, name: e.target.value })} className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-purple-50 transition-all outline-none" />
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div>
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Project Name</label>
+                                                <input type="text" placeholder="e.g. Q1 Global Growth" value={newProject.name} onChange={e => setNewProject({ ...newProject, name: e.target.value })} className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-purple-50 transition-all outline-none" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Client Name</label>
+                                                <input type="text" placeholder="e.g. Acme Corp" value={newProject.client_name} onChange={e => setNewProject({ ...newProject, client_name: e.target.value })} className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-purple-50 transition-all outline-none" />
+                                            </div>
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Project Description</label>
@@ -1738,47 +1918,97 @@ export default function Projects() {
                                                 <input type="date" value={newProject.start_date} onChange={e => setNewProject({ ...newProject, start_date: e.target.value })} className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-purple-50 transition-all outline-none" />
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Expected End Date</label>
-                                                <input type="date" value={newProject.end_date} onChange={e => setNewProject({ ...newProject, end_date: e.target.value })} className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-purple-50 transition-all outline-none" />
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between px-2 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center"><IndianRupee className="w-4 h-4" /></div>
-                                                <div>
-                                                    <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Partial Payment</p>
-                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">Mark if partially paid</p>
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Comp/Target End</label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <input type="date" value={newProject.end_date} onChange={e => setNewProject({ ...newProject, end_date: e.target.value })} className="w-full px-2 py-3.5 bg-gray-50 border-none rounded-xl text-[10px] font-bold focus:bg-white transition-all outline-none" title="Expected End" />
+                                                    <input type="date" value={newProject.completion_date} onChange={e => setNewProject({ ...newProject, completion_date: e.target.value })} className="w-full px-2 py-3.5 bg-emerald-50 border-none rounded-xl text-[10px] font-bold focus:bg-white transition-all outline-none" title="Actual Completion" />
                                                 </div>
                                             </div>
-                                            <input
-                                                type="checkbox"
-                                                checked={newProject.is_partially_paid}
-                                                onChange={e => setNewProject({ ...newProject, is_partially_paid: e.target.checked })}
-                                                className="w-5 h-5 rounded-lg border-2 border-gray-200 text-[#7C1CE2] focus:ring-[#7C1CE2] transition-all cursor-pointer"
-                                            />
                                         </div>
 
-                                        <div className="relative bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Project Signed By</label>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#7C1CE2] flex items-center justify-center shrink-0"><Users className="w-5 h-5" /></div>
-                                                <select
-                                                    value={newProject.signed_by}
-                                                    onChange={e => setNewProject({ ...newProject, signed_by: e.target.value })}
-                                                    className="flex-1 bg-transparent border-none text-sm font-bold focus:ring-0 p-0 outline-none cursor-pointer"
-                                                >
-                                                    <option value="">Select Signatory...</option>
-                                                    {companyUsers.map((u: any) => (
-                                                        <option key={u.username} value={u.username}>{u.name} ({u.username})</option>
-                                                    ))}
-                                                </select>
+                                        <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                                            <div className="flex items-center justify-between px-2 p-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center"><IndianRupee className="w-4 h-4" /></div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Partial Payment</p>
+                                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Mark if partially paid</p>
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newProject.is_partially_paid}
+                                                    onChange={e => setNewProject({ ...newProject, is_partially_paid: e.target.checked })}
+                                                    className="w-5 h-5 rounded-lg border-2 border-gray-200 text-[#7C1CE2] focus:ring-[#7C1CE2] transition-all cursor-pointer"
+                                                />
                                             </div>
-                                            <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-2">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${newProject.signed_by ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
-                                                <span className="text-[9px] font-black text-[#7C1CE2] uppercase tracking-widest">
-                                                    {newProject.signed_by ? (companyUsers.find(u => u.username === newProject.signed_by)?.name || 'Unknown User') : 'No Signatory Selected'}
-                                                </span>
+
+                                            {newProject.is_partially_paid && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    className="px-4 pb-4 pt-2 bg-orange-50/30 border-t border-orange-100"
+                                                >
+                                                    <label className="text-[9px] font-black text-orange-600 uppercase tracking-widest block mb-1.5 ml-1">Commenced Amount (INR)</label>
+                                                    <div className="relative">
+                                                        <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-orange-400" />
+                                                        <input
+                                                            type="number"
+                                                            placeholder="0.00"
+                                                            value={newProject.partially_paid_amount}
+                                                            onChange={e => setNewProject({ ...newProject, partially_paid_amount: e.target.value })}
+                                                            className="w-full pl-9 pr-4 py-2.5 bg-white border border-orange-100 rounded-xl text-sm font-bold text-orange-700 focus:ring-2 focus:ring-orange-200 transition-all outline-none"
+                                                        />
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="relative bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Project Signed By</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#7C1CE2] flex items-center justify-center shrink-0"><Users className="w-5 h-5" /></div>
+                                                    <select
+                                                        value={newProject.signed_by}
+                                                        onChange={e => setNewProject({ ...newProject, signed_by: e.target.value })}
+                                                        className="flex-1 bg-transparent border-none text-sm font-bold focus:ring-0 p-0 outline-none cursor-pointer"
+                                                    >
+                                                        <option value="">Select Signatory...</option>
+                                                        {companyUsers.filter((u: any) => u.level === 'L0' || u.level === 'L1').map((u: any) => (
+                                                            <option key={u.username} value={u.username}>{u.name} ({u.username})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${newProject.signed_by ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                                                    <span className="text-[9px] font-black text-[#7C1CE2] uppercase tracking-widest leading-none">
+                                                        {newProject.signed_by ? (companyUsers.find(u => u.username === newProject.signed_by)?.name || 'Member') : 'None'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="relative bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Allocated To</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0066FF] flex items-center justify-center shrink-0"><Users className="w-5 h-5" /></div>
+                                                    <select
+                                                        value={newProject.allocated_to}
+                                                        onChange={e => setNewProject({ ...newProject, allocated_to: e.target.value })}
+                                                        className="flex-1 bg-transparent border-none text-sm font-bold focus:ring-0 p-0 outline-none cursor-pointer"
+                                                    >
+                                                        <option value="">Select Lead...</option>
+                                                        {companyUsers.filter((u: any) => u.role === 'Project Manager').map((u: any) => (
+                                                            <option key={u.username} value={u.username}>{u.name} ({u.username})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${newProject.allocated_to ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                                                    <span className="text-[9px] font-black text-[#0066FF] uppercase tracking-widest leading-none">
+                                                        {newProject.allocated_to ? (companyUsers.find(u => u.username === newProject.allocated_to)?.name || 'Member') : 'None'}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

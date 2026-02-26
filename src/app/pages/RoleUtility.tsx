@@ -519,12 +519,22 @@ export default function RoleUtility() {
     const companyIndustry = companies.find(c => c.id === selectedCompany)?.industry || 'Hospital';
     const currentCompanyIndustry = selectedUser?.industry || companyIndustry;
 
+    const [viewHistory, setViewHistory] = useState<any[]>([]);
+
+    const handleBack = () => {
+        if (selectedUser) {
+            setSelectedUser(null);
+            return;
+        }
+        navigate('/workspace');
+    };
+
     return (
         <div className="min-h-screen bg-[#F8F9FA] flex flex-col overflow-hidden">
             {/* Navbar */}
             <nav className="h-14 bg-[#34495E] text-white flex items-center justify-between px-6 shadow-lg z-50">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/workspace')} className="p-2 hover:bg-white/10 rounded-full">
+                    <button onClick={handleBack} className="p-2 hover:bg-white/10 rounded-full">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="flex items-center gap-3">
@@ -902,12 +912,9 @@ export default function RoleUtility() {
                                                 {/* Level Badge */}
                                                 <div className={`p-3 rounded-xl border ${selectedUser.level === 'L0' ? 'bg-purple-50 border-purple-100' : 'bg-blue-50 border-blue-100'}`}>
                                                     <span className="text-[10px] uppercase font-bold text-gray-400 tracking-widest block mb-1">Clearance Level</span>
-                                                    <div className="flex items-center justify-center gap-2">
+                                                    <div className="flex items-center justify-center">
                                                         <span className={`text-xl font-black ${selectedUser.level === 'L0' ? 'text-purple-700' : 'text-blue-700'}`}>
                                                             {selectedUser.level || 'L7'}
-                                                        </span>
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${selectedUser.level === 'L0' ? 'bg-purple-200 text-purple-800' : 'bg-blue-200 text-blue-800'}`}>
-                                                            {LEVEL_DESCRIPTIONS[selectedUser.level || 'L7']}
                                                         </span>
                                                     </div>
                                                 </div>
