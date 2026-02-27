@@ -129,7 +129,7 @@ export default function Communication() {
         const processed = rawConversations.map(c => {
             const myMeta = myMemberships.find(m => m.conversation_id === c.id);
             const convMembers = allMemberships.filter(m => m.conversation_id === c.id);
-            const otherId = c.type === 'direct' ? convMembers.map(m => m.user_id).find(id => id !== currentUser?.username) : null;
+            const otherId = c.type === 'direct' ? convMembers.map(m => m.user_id).find(id => id !== currentUser?.username) : (c.type === 'direct' ? currentUser?.username : null);
 
             return {
                 ...c,
@@ -150,10 +150,11 @@ export default function Communication() {
 
         for (const conv of processed) {
             if (conv.type === 'direct') {
-                const person = conv.other_user_id;
-                if (!person || !seenPeople.has(person)) {
+                // If other_user_id is missing, it's either a self-chat or data is still loading
+                const personKey = conv.other_user_id || `self_${currentUser?.username}`;
+                if (!seenPeople.has(personKey)) {
                     deduped.push(conv);
-                    if (person) seenPeople.add(person);
+                    seenPeople.add(personKey);
                 }
             } else {
                 deduped.push(conv);
