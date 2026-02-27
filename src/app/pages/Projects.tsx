@@ -27,11 +27,12 @@ import {
     Flag,
     Filter,
     Layout,
-    Trash2
+    Trash2,
+    Maximize2
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { db, getCurrentTenantId } from '../core/firebase';
-import { collection, doc, addDoc, updateDoc, getDocs, getDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, getDocs, getDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 
 // --- Types ---
 type ViewType = 'dashboard' | 'projects' | 'tasks' | 'workload' | 'reports' | 'settings' | 'project-detail';
@@ -283,6 +284,8 @@ interface ProjectDetailViewProps {
     onAddRequirement: () => void;
     onUpdateRequirementField: (id: string, field: string, value: any) => void;
     onDeleteRequirement: (id: string) => void;
+    showReqView: any;
+    setShowReqView: (req: any) => void;
     user?: any;
 }
 
@@ -305,6 +308,8 @@ function ProjectDetailView({
     onAddRequirement,
     onUpdateRequirementField,
     onDeleteRequirement,
+    showReqView,
+    setShowReqView,
     user
 }: ProjectDetailViewProps) {
     const isPM = user?.role === 'Project Manager';
@@ -1023,21 +1028,30 @@ function ProjectDetailView({
                                     {requirements.filter(r => r.project_id === project.id).length > 0 ? requirements.filter(r => r.project_id === project.id).map((req) => (
                                         <tr key={req.id} className="group hover:bg-gray-50/30 transition-all">
                                             <td className="px-8 py-6">
-                                                <div className="flex flex-col gap-2 max-w-md">
-                                                    <input
-                                                        type="text"
-                                                        defaultValue={req.title}
-                                                        onBlur={(e) => onUpdateRequirementField(req.id, 'title', e.target.value)}
-                                                        className="text-sm font-black text-gray-900 bg-transparent border-none p-0 focus:ring-0 placeholder-gray-300 w-full"
-                                                        placeholder="Requirement Title"
-                                                    />
-                                                    <textarea
-                                                        defaultValue={req.description}
-                                                        onBlur={(e) => onUpdateRequirementField(req.id, 'description', e.target.value)}
-                                                        className="text-[10px] font-medium text-gray-400 bg-transparent border-none p-0 focus:ring-0 placeholder-gray-300 w-full resize-none CustomScroll"
-                                                        placeholder="Add detailed specifications or context here..."
-                                                        rows={2}
-                                                    />
+                                                <div className="flex items-start gap-3 group/cell">
+                                                    <div className="flex flex-col gap-2 max-w-md flex-1">
+                                                        <input
+                                                            type="text"
+                                                            defaultValue={req.title}
+                                                            onBlur={(e) => onUpdateRequirementField(req.id, 'title', e.target.value)}
+                                                            className="text-sm font-black text-gray-900 bg-transparent border-none p-0 focus:ring-0 placeholder-gray-300 w-full"
+                                                            placeholder="Requirement Title"
+                                                        />
+                                                        <textarea
+                                                            defaultValue={req.description}
+                                                            onBlur={(e) => onUpdateRequirementField(req.id, 'description', e.target.value)}
+                                                            className="text-[10px] font-medium text-gray-400 bg-transparent border-none p-0 focus:ring-0 placeholder-gray-300 w-full resize-none CustomScroll"
+                                                            placeholder="Add detailed specifications or context here..."
+                                                            rows={2}
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setShowReqView(req)}
+                                                        className="p-1.5 opacity-0 group-hover/cell:opacity-100 bg-purple-50 text-[#7C1CE2] rounded-lg transition-all hover:scale-110"
+                                                        title="Expand View"
+                                                    >
+                                                        <Maximize2 className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
@@ -1085,6 +1099,13 @@ function ProjectDetailView({
                                                     <div className="text-[8px] font-black text-gray-300 uppercase tracking-tight mr-4">
                                                         Updated: {req.updated_at ? new Date(req.updated_at).toLocaleDateString() : 'Never'}
                                                     </div>
+                                                    <button
+                                                        onClick={() => setShowReqView(req)}
+                                                        className="p-2 hover:bg-purple-50 text-gray-300 hover:text-[#7C1CE2] rounded-xl transition-all"
+                                                        title="View Spec"
+                                                    >
+                                                        <Maximize2 className="w-4 h-4" />
+                                                    </button>
                                                     <button
                                                         onClick={() => onDeleteRequirement(req.id)}
                                                         className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-xl transition-all"
@@ -1339,11 +1360,17 @@ export default function Projects() {
         const parsed = JSON.parse(savedUser);
         setUser(parsed);
         const tId = parsed.company || parsed.tenant_id;
-        if (tId) loadData(tId);
+        if (tId) {
+            fetchCompanyUsers(tId);
+            // Real-time synchronization
+            const unsub = setupDataSync(tId);
+            return () => unsub();
+        }
     }, [navigate]);
 
     const [showTaskEdit, setShowTaskEdit] = useState<any>(null);
     const [showTaskView, setShowTaskView] = useState<any>(null);
+    const [showReqView, setShowReqView] = useState<any>(null);
     const [activeTaskMenu, setActiveTaskMenu] = useState<string | null>(null);
     const [companyUsers, setCompanyUsers] = useState<any[]>([]);
 
@@ -1368,106 +1395,99 @@ export default function Projects() {
         }
     };
 
-    const loadData = async (tId: string, silent = false) => {
-        if (!tId) {
-            console.warn('loadData called without tenant ID');
-            setIsLoading(false);
-            return;
-        }
-        if (!silent) setIsLoading(true);
-        try {
-            console.log(`[Engine] Synchronizing node for tenant: ${tId}`);
-            // 1. Fetch Projects, Tasks & Milestones from Firestore
-            const projQ = query(collection(db, 'projects'), where('tenant_id', '==', tId));
-            const taskQ = query(collection(db, 'tasks'), where('tenant_id', '==', tId));
-            const mileQ = query(collection(db, 'milestones'), where('tenant_id', '==', tId));
-            const reqQ = query(collection(db, 'requirements'), where('tenant_id', '==', tId));
+    const setupDataSync = (tId: string) => {
+        setIsLoading(true);
+        console.log(`[Engine] Activating Real-time Sync for Node: ${tId}`);
 
-            const [projSnap, taskSnap, mileSnap, reqSnap] = await Promise.all([
-                getDocs(projQ),
-                getDocs(taskQ),
-                getDocs(mileQ),
-                getDocs(reqQ)
-            ]).catch(err => {
-                if (err.message?.includes('index')) {
-                    console.error('CRITICAL: Firestore Index required. Check Firebase console logs.');
-                    alert('Database optimization required. Some data may be hidden until indexes are built.');
-                }
-                throw err;
-            });
+        const queries = {
+            projects: query(collection(db, 'projects'), where('tenant_id', '==', tId)),
+            tasks: query(collection(db, 'tasks'), where('tenant_id', '==', tId)),
+            milestones: query(collection(db, 'milestones'), where('tenant_id', '==', tId)),
+            requirements: query(collection(db, 'requirements'), where('tenant_id', '==', tId))
+        };
 
-            let projData = projSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        let rawData: { projects: any[], tasks: any[], milestones: any[], requirements: any[] } = {
+            projects: [], tasks: [], milestones: [], requirements: []
+        };
+
+        const processAndSet = () => {
+            const storedUser = localStorage.getItem('alphery_user');
+            const sUser = storedUser ? JSON.parse(storedUser) : null;
+            const role = (sUser?.role || '').toString().toLowerCase();
+            const level = (sUser?.level || '').toString().toUpperCase();
+            const isPM = role === 'project manager' || (sUser?.designation || '').toLowerCase() === 'project manager';
+            const isAdmin = level === 'L0' || level === 'L1' || role === 'super admin' || role === 'admin';
+
+            let filteredProjects = rawData.projects
                 .filter((p: any) => !p.deleted_at)
                 .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
-            // Filter for Project Managers: Only show projects allocated to them
-            const storedUser = localStorage.getItem('alphery_user');
-            if (storedUser) {
-                const sUser = JSON.parse(storedUser);
-                const isPM = (sUser.role === 'Project Manager' || sUser.designation === 'Project Manager');
-                const isAdmin = sUser.level === 'L0' || sUser.level === 'L1' || sUser.role === 'Super Admin';
-
-                if (isPM && !isAdmin) {
-                    const originalCount = projData.length;
-                    projData = projData.filter((p: any) => {
-                        // Project Managers see projects ALLOCATED to them OR projects they CREATED
-                        const isAllocated = p.allocated_to && p.allocated_to.toString().trim().toLowerCase() === sUser.username?.toString().trim().toLowerCase();
-                        const isCreator = p.created_by && p.created_by.toString().trim().toLowerCase() === sUser.username?.toString().trim().toLowerCase();
-                        return isAllocated || isCreator;
-                    });
-                    if (originalCount > 0 && projData.length === 0) {
-                        console.warn('PM Filter hid all projects. Ensure "Allocated To" matches your username.');
-                    }
-                }
+            if (isPM && !isAdmin) {
+                const myId = (sUser.username || sUser.email || sUser.id || '').toString().trim().toLowerCase();
+                const myName = (sUser.name || '').toString().trim().toLowerCase();
+                filteredProjects = filteredProjects.filter((p: any) => {
+                    const allocated = (p.allocated_to || '').toString().trim().toLowerCase();
+                    const creator = (p.created_by || '').toString().trim().toLowerCase();
+                    return allocated === myId || creator === myId || (myName && (allocated === myName || creator === myName));
+                });
             }
-            const taskData = taskSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((t: any) => !t.deleted_at);
-            const mileData = mileSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+            const activeIds = new Set(filteredProjects.map((p: any) => p.id));
+            const tasks = rawData.tasks.filter((t: any) => !t.deleted_at && activeIds.has(t.project_id));
+            const milestones = rawData.milestones.filter((m: any) => activeIds.has(m.project_id))
                 .sort((a: any, b: any) => new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime());
-            const reqData = reqSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-                .filter((r: any) => !r.deleted_at)
+            const requirements = rawData.requirements.filter((r: any) => !r.deleted_at && activeIds.has(r.project_id))
                 .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
-            // 2. Filter tasks/milestones based on active projects
-            const activeProjectIds = new Set(projData.map((p: any) => p.id));
-            const filteredTasks = taskData.filter((t: any) => activeProjectIds.has(t.project_id));
-            const filteredMilestones = mileData.filter((m: any) => activeProjectIds.has(m.project_id));
-
-            // 3. Calculate Progress for each project
-            const enhancedProjects = projData.map((p: any) => {
-                const pTasks = filteredTasks.filter((t: any) => t.project_id === p.id);
-                const pReqs = reqData.filter((r: any) => r.project_id === p.id);
+            const enhanced = filteredProjects.map((p: any) => {
+                const pTasks = tasks.filter((t: any) => t.project_id === p.id);
                 const done = pTasks.filter((t: any) => t.status === 'Done').length;
                 const calculatedProg = pTasks.length > 0 ? Math.round((done / pTasks.length) * 100) : 0;
                 return { ...p, progress: p.progress > 0 ? p.progress : calculatedProg };
             });
 
-            setProjects(enhancedProjects);
-            setTasks(filteredTasks as any);
-            setMilestones(filteredMilestones);
-            setRequirements(reqData as any);
+            setProjects(enhanced);
+            setTasks(tasks as any);
+            setMilestones(milestones);
+            setRequirements(requirements as any);
 
-            // 4. Stats logic
-            const activeCount = filteredTasks.filter((t: any) => t.status !== 'Done').length;
-            const completedCount = filteredTasks.filter((t: any) => t.status === 'Done').length;
-
-            let totalExp = 0;
-            try {
-                const expQ = query(collection(db, 'project_expenses'), where('tenant_id', '==', tId));
-                const expSnap = await getDocs(expQ);
-                totalExp = expSnap.docs.reduce((acc, d) => acc + (Number(d.data().amount) || 0), 0);
-            } catch { /* collection may not exist */ }
-
-            setStats({
+            const activeCount = tasks.filter((t: any) => t.status !== 'Done').length;
+            const completedCount = tasks.filter((t: any) => t.status === 'Done').length;
+            setStats(prev => ({
+                ...prev,
                 activeTasks: activeCount,
                 completedTasks: completedCount,
-                totalExpenses: totalExp,
                 velocity: (activeCount + completedCount) > 0 ? (completedCount / (activeCount + completedCount)) * 10 : 0
-            });
-        } catch (err) {
-            console.error('Fetch Error:', err);
-        } finally {
+            }));
             setIsLoading(false);
-        }
+        };
+
+        const unsubs = [
+            onSnapshot(queries.projects, (snap) => {
+                rawData.projects = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+                processAndSet();
+            }, (err) => console.error('Snapshot Error (Projects):', err)),
+            onSnapshot(queries.tasks, (snap) => {
+                rawData.tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+                processAndSet();
+            }, (err) => console.error('Snapshot Error (Tasks):', err)),
+            onSnapshot(queries.milestones, (snap) => {
+                rawData.milestones = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+                processAndSet();
+            }, (err) => console.error('Snapshot Error (Milestones):', err)),
+            onSnapshot(queries.requirements, (snap) => {
+                rawData.requirements = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+                processAndSet();
+            }, (err) => console.error('Snapshot Error (Requirements):', err))
+        ];
+
+        // Background fetch for expenses (non-critical)
+        getDocs(query(collection(db, 'project_expenses'), where('tenant_id', '==', tId))).then(snap => {
+            const total = snap.docs.reduce((acc, d) => acc + (Number(d.data().amount) || 0), 0);
+            setStats(prev => ({ ...prev, totalExpenses: total }));
+        }).catch(() => { });
+
+        return () => unsubs.forEach(u => u());
     };
 
     // Bridge for sub-components
@@ -1476,13 +1496,11 @@ export default function Projects() {
     (window as any).updateTaskStatus = async (id: string, newStatus: string) => {
         try {
             await updateDoc(doc(db, 'tasks', id), { status: newStatus });
-            loadData(getActiveTenantId()!, true);
         } catch (err) { console.error(err); }
     };
     (window as any).deleteTask = async (id: string) => {
         try {
             await updateDoc(doc(db, 'tasks', id), { deleted_at: new Date().toISOString() });
-            loadData(getActiveTenantId()!, true);
         } catch (err) { console.error(err); }
     };
     (window as any).updateTaskField = async (id: string, field: string, value: any) => {
@@ -1504,7 +1522,6 @@ export default function Projects() {
     (window as any).updateProjectBudget = async (id: string, budget: string) => {
         try {
             await updateDoc(doc(db, 'projects', id), { budget_allocated: parseFloat(budget) });
-            loadData(getActiveTenantId()!, true);
         } catch (err) { console.error(err); }
     };
     (window as any).isEngineSaving = isSaving;
@@ -1565,7 +1582,6 @@ export default function Projects() {
             setTasks([...tasks, { id: newTaskRef.id, ...taskData } as any]);
             setShowTaskModal(false);
             setNewTask({ title: '', description: '', priority: 'Medium', status: 'To Do', assignee: '' });
-            loadData(curTenantId, true);
         } finally { setIsSaving(false); }
     };
 
@@ -1742,7 +1758,7 @@ export default function Projects() {
                 <div className="h-16 flex items-center px-6 border-b border-gray-50 justify-between">
                     <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-[#7C1CE2] flex items-center justify-center text-white shadow-lg shadow-purple-100"><Briefcase className="w-4 h-4" /></div>
-                        <span className="font-black text-gray-900 tracking-tighter text-lg uppercase">Engine</span>
+                        <span className="font-black text-gray-900 tracking-tighter text-lg uppercase">Projects</span>
                     </div>
                     <button
                         onClick={() => {
@@ -1787,10 +1803,19 @@ export default function Projects() {
 
                 <div className="p-4">
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Connected Node</p>
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-xs font-bold text-gray-800 truncate">{getActiveTenantId() || 'Stand-alone'}</span>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-center">Engine Diagnostics</p>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-tighter">Tenant Node</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-gray-800 truncate">{getActiveTenantId() || 'None'}</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-tighter">Identity Signature</p>
+                                <p className="text-[10px] font-bold text-[#7C1CE2] truncate mt-0.5">{user?.username || user?.email || 'Guest'}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1842,8 +1867,26 @@ export default function Projects() {
                             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input type="text" placeholder="Omni-Search..." className="pl-9 pr-4 py-2 bg-gray-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-purple-100 w-64 transition-all" />
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-[10px] font-black text-blue-600 shadow-sm">
-                            {user?.username?.substring(0, 2).toUpperCase() || 'AD'}
+                        <div className="flex items-center gap-3">
+                            <div className="text-right hidden sm:block">
+                                <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{user?.name || 'Authorized'}</p>
+                                <p className="text-[8px] font-bold text-[#7C1CE2] uppercase tracking-tighter">{user?.role || 'User'}</p>
+                            </div>
+                            <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-[10px] font-black text-blue-600 shadow-sm overflow-hidden">
+                                {user?.image || user?.photo || user?.picture || user?.avatar ? (
+                                    <img
+                                        src={user.image || user.photo || user.picture || user.avatar}
+                                        alt={user?.name || 'User'}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).parentElement!.innerHTML = user?.username?.substring(0, 2).toUpperCase() || 'AD';
+                                        }}
+                                    />
+                                ) : (
+                                    user?.username?.substring(0, 2).toUpperCase() || 'AD'
+                                )}
+                            </div>
                         </div>
                     </div>
                 </header>
@@ -1874,6 +1917,8 @@ export default function Projects() {
                             onAddRequirement={handleAddRequirement}
                             onUpdateRequirementField={handleUpdateRequirementField}
                             onDeleteRequirement={handleDeleteRequirement}
+                            showReqView={showReqView}
+                            setShowReqView={setShowReqView}
                             user={user}
                         />
                     )}
@@ -1985,6 +2030,67 @@ export default function Projects() {
                                     >
                                         Modify Parameters
                                     </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+
+                    {showReqView && (
+                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xl">
+                            <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-white/20">
+                                <div className="p-12 relative">
+                                    <button onClick={() => setShowReqView(null)} className="absolute top-8 right-10 p-2 hover:bg-gray-50 rounded-full text-gray-400 hover:text-gray-900 transition-all font-black">✕</button>
+
+                                    <div className="flex items-center gap-2 mb-8">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${showReqView.priority === 'High' || showReqView.priority === 'Critical' ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
+                                            {showReqView.priority} PRIORITY
+                                        </span>
+                                        <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                            {showReqView.category || 'GENERAL'}
+                                        </span>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${showReqView.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-purple-50 text-purple-600'}`}>
+                                            {showReqView.status}
+                                        </span>
+                                    </div>
+
+                                    <h2 className="text-4xl font-black text-gray-900 tracking-tighter mb-8 leading-[1.1]">{showReqView.title}</h2>
+
+                                    <div className="space-y-10">
+                                        <div>
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Requirement Specification</h4>
+                                            <div className="bg-gray-50/50 p-8 rounded-[2rem] border border-gray-100/50">
+                                                <p className="text-sm font-medium text-gray-700 leading-relaxed CustomScroll overflow-y-auto max-h-[300px]">
+                                                    {showReqView.description || 'No detailed specifications provided for this requirement.'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-6 border-t border-gray-50">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
+                                                    <Calendar className="w-6 h-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Target Due Date</p>
+                                                    <p className="text-sm font-bold text-gray-900">{showReqView.due_date || 'TBD'}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Last Revised</p>
+                                                <p className="text-xs font-bold text-gray-500">{showReqView.updated_at ? new Date(showReqView.updated_at).toLocaleString() : 'System Initialized'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-12 flex gap-4">
+                                        <button
+                                            onClick={() => setShowReqView(null)}
+                                            className="flex-1 py-5 bg-gray-900 text-white rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-gray-200 hover:bg-gray-800 transition-all"
+                                        >
+                                            Close View
+                                        </button>
+                                    </div>
                                 </div>
                             </motion.div>
                         </div>

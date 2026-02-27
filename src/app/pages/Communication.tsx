@@ -77,88 +77,118 @@ export default function Communication() {
             params.append('sheetName', user.company || tId);
             const gsResponse = await fetch(GS_API_URL, { method: 'POST', body: params, redirect: 'follow' });
             const gsData = await gsResponse.json();
-            if (gsData.success) setAllUsers(gsData.user);
 
-            // Fetch conversation memberships for this user
-            const membersQ = query(collection(db, 'conversation_members'), where('user_id', '==', user.username));
-            const memberSnap = await getDocs(membersQ);
-            const memberOf = memberSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
-
-            if (memberOf.length > 0) {
-                const convIds = memberOf.map(m => m.conversation_id);
-
-                // Fetch conversations (Firebase 'in' query supports max 30 items)
-                const convChunks = [];
-                for (let i = 0; i < convIds.length; i += 30) {
-                    convChunks.push(convIds.slice(i, i + 30));
-                }
-
-                let allConvs: any[] = [];
-                for (const chunk of convChunks) {
-                    const convsQ = query(collection(db, 'conversations'), where('__name__', 'in', chunk));
-                    const convsSnap = await getDocs(convsQ);
-                    const convs = convsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    allConvs = [...allConvs, ...convs];
-                }
-
-                // Fetch all members for these conversations
-                const allMembersQ = query(collection(db, 'conversation_members'), where('conversation_id', 'in', convIds.slice(0, 30)));
-                const allMembersSnap = await getDocs(allMembersQ);
-                const allMembers = allMembersSnap.docs.map(d => d.data());
-
-                const processed = allConvs
-                    .filter(c => c.tenant_id === tId)
-                    .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''))
-                    .map(c => {
-                        const convMembers = allMembers.filter(m => m.conversation_id === c.id);
-                        const myMeta = memberOf.find(m => m.conversation_id === c.id);
-                        return {
-                            ...c,
-                            members: convMembers.map(m => m.user_id),
-                            member_roles: Object.fromEntries(convMembers.map(m => [m.user_id, m.role || 'member'])),
-                            last_cleared_at: convMembers.find(m => m.user_id === user.username)?.last_cleared_at,
-                            last_read_at: myMeta?.last_read_at,
-                            is_muted: myMeta?.is_muted || false,
-                            is_pinned: myMeta?.is_pinned || false,
-                        };
-                    });
-                setConversations(processed);
-
-                // Calculate unread counts
-                const counts: Record<string, number> = {};
-                for (const c of processed) {
-                    try {
-                        const msgsQ = query(
-                            collection(db, 'messages'),
-                            where('conversation_id', '==', c.id),
-                            orderBy('created_at', 'desc'),
-                            limit(50)
-                        );
-                        const msgsSnap = await getDocs(msgsQ);
-                        const unread = msgsSnap.docs.filter(d => {
-                            const msg = d.data();
-                            return msg.sender_id !== user.username &&
-                                msg.created_at > (c.last_read_at || '1970-01-01Z');
-                        }).length;
-                        counts[c.id] = unread;
-                    } catch { counts[c.id] = 0; }
-                }
-                setUnreadCounts(counts);
+            if (gsData.success && Array.isArray(gsData.user)) {
+                // Dedup users by username to avoid "many admin users" issue in the list
+                const uniqueUsers = Array.from(new Map(gsData.user.map((u: any) => [u.username, u])).values()) as ChatUser[];
+                setAllUsers(uniqueUsers);
             }
-            // Fetch online users
-            try {
-                const presQ = query(collection(db, 'user_presence'), where('tenant_id', '==', tId));
-                const presSnap = await getDocs(presQ);
-                const statusMap: Record<string, string> = {};
-                presSnap.docs.forEach(d => {
-                    const p = d.data();
-                    statusMap[p.user_id] = p.status;
-                });
-                setOnlineUsers(statusMap);
-            } catch { /* collection may not exist */ }
-        } catch (err) { console.error('Error loading chat data:', err); }
-        finally { setLoading(false); }
+        } catch (err) {
+            console.error('Error loading users:', err);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    // --- 3. Realtime Conversations List ---
+    useEffect(() => {
+        if (!tenantId || !currentUser) return;
+
+        // Listen to conversation memberships for this user
+        const membersQ = query(
+            collection(db, 'conversation_members'),
+            where('user_id', '==', currentUser.username)
+        );
+
+        const unsubMembers = onSnapshot(membersQ, (memberSnap) => {
+            const memberOf = memberSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+            if (memberOf.length === 0) {
+                setConversations([]);
+                return;
+            }
+
+            const convIds = memberOf.map(m => m.conversation_id);
+
+            // Listen to conversations (chunked for Firebase's 30 limit in 'in' queries)
+            const convChunks = [];
+            for (let i = 0; i < convIds.length; i += 30) {
+                convChunks.push(convIds.slice(i, i + 30));
+            }
+
+            const allUnsubs: (() => void)[] = [];
+
+            convChunks.forEach(chunk => {
+                const convsQ = query(collection(db, 'conversations'), where('tenant_id', '==', tenantId));
+                // We filter manually or use a more specific query if possible. 
+                // For simplicity and to bypass the 'in' query limitations if they grow, 
+                // we'll filter the snapshot.
+                const unsub = onSnapshot(convsQ, (convsSnap) => {
+                    const convs = convsSnap.docs
+                        .map(d => ({ id: d.id, ...d.data() }))
+                        .filter(c => convIds.includes(c.id));
+
+                    setConversations(prev => {
+                        const newMap = new Map(prev.map(c => [c.id, c]));
+                        convs.forEach(c => {
+                            const myMeta = memberOf.find(m => m.conversation_id === c.id);
+                            // Merge members into conversation object
+                            newMap.set(c.id, {
+                                ...c,
+                                members: memberOf.filter(m => m.conversation_id === c.id).map(m => m.user_id),
+                                last_cleared_at: myMeta?.last_cleared_at || '1970-01-01',
+                                last_read_at: myMeta?.last_read_at || '1970-01-01',
+                                is_muted: myMeta?.is_muted || false,
+                                is_pinned: myMeta?.is_pinned || false,
+                            } as any);
+                        });
+                        return Array.from(newMap.values()).sort((a: any, b: any) =>
+                            (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '')
+                        );
+                    });
+                });
+                allUnsubs.push(unsub);
+            });
+
+            return () => allUnsubs.forEach(unsub => unsub());
+        });
+
+        return () => unsubMembers();
+    }, [tenantId, currentUser]);
+
+    // --- 3.1 Realtime Unread Counts (Global Listener) ---
+    useEffect(() => {
+        if (!tenantId || !currentUser || conversations.length === 0) return;
+
+        const convIds = conversations.map(c => c.id);
+
+        // Listen to recent messages across user's conversations to update unread counts and sidebar
+        const msgsQ = query(
+            collection(db, 'messages'),
+            where('conversation_id', 'in', convIds.slice(0, 30)),
+            orderBy('created_at', 'desc'),
+            limit(100)
+        );
+
+        const unsubUnread = onSnapshot(msgsQ, (snap) => {
+            setUnreadCounts(prev => {
+                const newCounts = { ...prev };
+                // Reset counts for active conversations to re-calculate
+                convIds.forEach(id => newCounts[id] = 0);
+
+                snap.docs.forEach(d => {
+                    const msg = d.data();
+                    const conv = conversations.find(c => c.id === msg.conversation_id);
+                    if (conv && msg.sender_id !== currentUser.username && msg.created_at > (conv.last_read_at || '1970-01-01')) {
+                        newCounts[msg.conversation_id] = (newCounts[msg.conversation_id] || 0) + 1;
+                    }
+                });
+                return newCounts;
+            });
+        });
+
+        return () => unsubUnread();
+    }, [tenantId, currentUser, conversations]);
+
 
     // --- 3. Realtime Subscriptions (Firebase onSnapshot) ---
     useEffect(() => {
@@ -172,18 +202,23 @@ export default function Communication() {
             where('conversation_id', '==', activeConversation.id),
             orderBy('created_at', 'asc')
         );
+
         const unsubMsgs = onSnapshot(msgsQ, (snapshot) => {
+            const clearedAt = activeConversation.last_cleared_at ? new Date(activeConversation.last_cleared_at) : new Date(0);
+
             snapshot.docChanges().forEach(change => {
                 const data = { id: change.doc.id, ...change.doc.data() } as Message;
-                const clearedAt = activeConversation.last_cleared_at ? new Date(activeConversation.last_cleared_at) : new Date(0);
+
                 if (change.type === 'added') {
                     if (new Date(data.created_at) > clearedAt) {
                         const sender = allUsers.find(u => u.username === data.sender_id);
                         setMessages(prev => {
                             if (prev.find(m => m.id === data.id)) return prev;
-                            return [...prev, { ...data, sender_name: sender?.name || data.sender_id }];
+                            const enriched = { ...data, sender_name: sender?.name || data.sender_id };
+                            // Scroll if it's a new message
+                            setTimeout(scrollToBottom, 50);
+                            return [...prev, enriched];
                         });
-                        scrollToBottom();
                         markAsRead(activeConversation.id, currentUser.username);
                     }
                 } else if (change.type === 'modified') {
@@ -193,6 +228,7 @@ export default function Communication() {
                 }
             });
         });
+
 
         // Typing indicators listener
         const typingQ = query(collection(db, 'typing_indicators'), where('conversation_id', '==', activeConversation.id));
@@ -292,19 +328,29 @@ export default function Communication() {
 
         const content = newMessage.trim();
         const mentions = (content.match(/@(\w+)/g) || []).map(m => m.slice(1));
+        const timestamp = new Date().toISOString();
+
         setNewMessage(''); setReplyTo(null);
         clearTypingIndicator(activeConversation.id, currentUser.username);
 
         try {
+            // 1. Add Message
             await addDoc(collection(db, 'messages'), {
                 conversation_id: activeConversation.id, sender_id: currentUser.username,
                 content, tenant_id: tenantId, type: replyTo ? 'reply' : 'text',
                 reply_to: replyTo?.id || null, mentions,
                 is_edited: false, is_deleted: false, deleted_for: [], is_pinned: false,
-                reactions: {}, created_at: new Date().toISOString()
+                reactions: {}, created_at: timestamp
+            });
+
+            // 2. Update conversation for real-time sidebar updates
+            await updateDoc(doc(db, 'conversations', activeConversation.id), {
+                last_message: content,
+                updated_at: timestamp
             });
         } catch (err) { console.error('Error sending message:', err); }
     };
+
 
     // --- Typing handler ---
     const handleTyping = () => {
@@ -379,10 +425,12 @@ export default function Communication() {
         if (selectedUsers.length === 0) { toast.error("Select at least one member."); return; }
         setIsCreating(true);
         try {
+            const timestamp = new Date().toISOString();
             const newConvRef = await addDoc(collection(db, 'conversations'), {
                 tenant_id: tenantId, type: 'group', name: groupName.trim(), created_by: currentUser.username,
-                is_archived: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+                is_archived: false, created_at: timestamp, updated_at: timestamp
             });
+
             const convId = newConvRef.id;
             // Add creator as admin
             await setDoc(doc(db, 'conversation_members', `${convId}_${currentUser.username}`), { conversation_id: convId, user_id: currentUser.username, role: 'admin', is_muted: false, is_pinned: false, last_cleared_at: '1970-01-01', last_read_at: '1970-01-01' });
@@ -466,8 +514,10 @@ export default function Communication() {
 
     const handleAddMember = async (userId: string) => {
         if (!activeConversation || !tenantId) return;
+        const timestamp = new Date().toISOString();
         await addMemberToGroup(activeConversation.id, userId);
-        await addDoc(collection(db, 'messages'), { conversation_id: activeConversation.id, sender_id: 'system', content: `${currentUser?.name} added ${allUsers.find(u => u.username === userId)?.name || userId}`, tenant_id: tenantId, type: 'system', is_edited: false, is_deleted: false, deleted_for: [], is_pinned: false, reactions: {}, mentions: [], created_at: new Date().toISOString() });
+        await addDoc(collection(db, 'messages'), { conversation_id: activeConversation.id, sender_id: 'system', content: `${currentUser?.name} added ${allUsers.find(u => u.username === userId)?.name || userId}`, tenant_id: tenantId, type: 'system', is_edited: false, is_deleted: false, deleted_for: [], is_pinned: false, reactions: {}, mentions: [], created_at: timestamp });
+        await updateDoc(doc(db, 'conversations', activeConversation.id), { updated_at: timestamp });
         setActiveConversation(prev => prev ? { ...prev, members: [...(prev.members || []), userId] } : null);
         setShowAddMemberModal(false);
         toast.success("Member added.");
@@ -476,11 +526,14 @@ export default function Communication() {
     const handleRemoveMember = async (userId: string) => {
         if (!activeConversation || !tenantId) return;
         if (!window.confirm(`Remove ${allUsers.find(u => u.username === userId)?.name || userId}?`)) return;
+        const timestamp = new Date().toISOString();
         await removeMemberFromGroup(activeConversation.id, userId);
-        await addDoc(collection(db, 'messages'), { conversation_id: activeConversation.id, sender_id: 'system', content: `${currentUser?.name} removed ${allUsers.find(u => u.username === userId)?.name || userId}`, tenant_id: tenantId, type: 'system', is_edited: false, is_deleted: false, deleted_for: [], is_pinned: false, reactions: {}, mentions: [], created_at: new Date().toISOString() });
+        await addDoc(collection(db, 'messages'), { conversation_id: activeConversation.id, sender_id: 'system', content: `${currentUser?.name} removed ${allUsers.find(u => u.username === userId)?.name || userId}`, tenant_id: tenantId, type: 'system', is_edited: false, is_deleted: false, deleted_for: [], is_pinned: false, reactions: {}, mentions: [], created_at: timestamp });
+        await updateDoc(doc(db, 'conversations', activeConversation.id), { updated_at: timestamp });
         setActiveConversation(prev => prev ? { ...prev, members: prev.members?.filter(m => m !== userId) } : null);
         toast.success("Member removed.");
     };
+
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
