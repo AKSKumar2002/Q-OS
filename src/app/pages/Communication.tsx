@@ -19,6 +19,9 @@ import {
 
 export default function Communication() {
     const navigate = useNavigate();
+    const [myMemberships, setMyMemberships] = useState<any[]>([]);
+    const [allMemberships, setAllMemberships] = useState<any[]>([]);
+    const [rawConversations, setRawConversations] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [tenantId, setTenantId] = useState<string | null>(null);
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -70,8 +73,14 @@ export default function Communication() {
 
     // --- 2. Load Data ---
     const loadInitialData = async (tId: string, user: any) => {
-        setLoading(true);
         try {
+            // Hot-load from cache for instant UI
+            const cached = localStorage.getItem(`chat_users_${tId}`);
+            if (cached) {
+                setAllUsers(JSON.parse(cached));
+                setLoading(false);
+            }
+
             const params = new URLSearchParams();
             params.append('action', 'getUsers');
             params.append('sheetName', user.company || tId);
@@ -79,9 +88,9 @@ export default function Communication() {
             const gsData = await gsResponse.json();
 
             if (gsData.success && Array.isArray(gsData.user)) {
-                // Dedup users by username to avoid "many admin users" issue in the list
                 const uniqueUsers = Array.from(new Map(gsData.user.map((u: any) => [u.username, u])).values()) as ChatUser[];
                 setAllUsers(uniqueUsers);
+                localStorage.setItem(`chat_users_${tId}`, JSON.stringify(uniqueUsers));
             }
         } catch (err) {
             console.error('Error loading users:', err);
@@ -90,70 +99,70 @@ export default function Communication() {
         }
     };
 
-    // --- 3. Realtime Conversations List ---
+    // --- 3. Realtime State Sync ---
     useEffect(() => {
         if (!tenantId || !currentUser) return;
+        // Listen to user's memberships
+        const q = query(collection(db, 'conversation_members'), where('user_id', '==', currentUser.username));
+        return onSnapshot(q, (snap) => setMyMemberships(snap.docs.map(d => d.data())));
+    }, [tenantId, currentUser]);
 
-        // Listen to conversation memberships for this user
-        const membersQ = query(
-            collection(db, 'conversation_members'),
-            where('user_id', '==', currentUser.username)
-        );
+    useEffect(() => {
+        if (myMemberships.length === 0) { setAllMemberships([]); setRawConversations([]); return; }
+        const ids = myMemberships.map(m => m.conversation_id);
 
-        const unsubMembers = onSnapshot(membersQ, (memberSnap) => {
-            const memberOf = memberSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
-            if (memberOf.length === 0) {
-                setConversations([]);
-                return;
-            }
-
-            const convIds = memberOf.map(m => m.conversation_id);
-
-            // Listen to conversations (chunked for Firebase's 30 limit in 'in' queries)
-            const convChunks = [];
-            for (let i = 0; i < convIds.length; i += 30) {
-                convChunks.push(convIds.slice(i, i + 30));
-            }
-
-            const allUnsubs: (() => void)[] = [];
-
-            convChunks.forEach(chunk => {
-                const convsQ = query(collection(db, 'conversations'), where('tenant_id', '==', tenantId));
-                // We filter manually or use a more specific query if possible. 
-                // For simplicity and to bypass the 'in' query limitations if they grow, 
-                // we'll filter the snapshot.
-                const unsub = onSnapshot(convsQ, (convsSnap) => {
-                    const convs = convsSnap.docs
-                        .map(d => ({ id: d.id, ...d.data() }))
-                        .filter(c => convIds.includes(c.id));
-
-                    setConversations(prev => {
-                        const newMap = new Map(prev.map(c => [c.id, c]));
-                        convs.forEach(c => {
-                            const myMeta = memberOf.find(m => m.conversation_id === c.id);
-                            // Merge members into conversation object
-                            newMap.set(c.id, {
-                                ...c,
-                                members: memberOf.filter(m => m.conversation_id === c.id).map(m => m.user_id),
-                                last_cleared_at: myMeta?.last_cleared_at || '1970-01-01',
-                                last_read_at: myMeta?.last_read_at || '1970-01-01',
-                                is_muted: myMeta?.is_muted || false,
-                                is_pinned: myMeta?.is_pinned || false,
-                            } as any);
-                        });
-                        return Array.from(newMap.values()).sort((a: any, b: any) =>
-                            (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '')
-                        );
-                    });
-                });
-                allUnsubs.push(unsub);
-            });
-
-            return () => allUnsubs.forEach(unsub => unsub());
+        // Listen to ALL members of these conversations
+        const unsubMembers = onSnapshot(query(collection(db, 'conversation_members'), where('conversation_id', 'in', ids.slice(0, 30))), (snap) => {
+            setAllMemberships(snap.docs.map(d => d.data()));
         });
 
-        return () => unsubMembers();
-    }, [tenantId, currentUser]);
+        // Listen to conversation metadata
+        const unsubConvs = onSnapshot(query(collection(db, 'conversations'), where('__name__', 'in', ids.slice(0, 30))), (snap) => {
+            setRawConversations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => { unsubMembers(); unsubConvs(); };
+    }, [myMemberships]);
+
+    // Merge and Process Conversations
+    useEffect(() => {
+        const processed = rawConversations.map(c => {
+            const myMeta = myMemberships.find(m => m.conversation_id === c.id);
+            const convMembers = allMemberships.filter(m => m.conversation_id === c.id);
+            const otherId = c.type === 'direct' ? convMembers.map(m => m.user_id).find(id => id !== currentUser?.username) : null;
+
+            return {
+                ...c,
+                members: convMembers.map(m => m.user_id),
+                other_user_id: otherId,
+                member_roles: Object.fromEntries(convMembers.map(m => [m.user_id, m.role || 'member'])),
+                last_cleared_at: myMeta?.last_cleared_at || '1970-01-01',
+                last_read_at: myMeta?.last_read_at || '1970-01-01',
+                is_muted: myMeta?.is_muted || false,
+                is_pinned: myMeta?.is_pinned || false,
+                unread_count: 0
+            };
+        }).sort((a: any, b: any) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+
+        // Deduplicate direct chats: only keep the most recent one per person
+        const deduped: any[] = [];
+        const seenPeople = new Set();
+
+        for (const conv of processed) {
+            if (conv.type === 'direct') {
+                const person = conv.other_user_id;
+                if (!person || !seenPeople.has(person)) {
+                    deduped.push(conv);
+                    if (person) seenPeople.add(person);
+                }
+            } else {
+                deduped.push(conv);
+            }
+        }
+
+        setConversations(deduped as any);
+    }, [rawConversations, allMemberships, myMemberships, currentUser]);
+
 
     // --- 3.1 Realtime Unread Counts (Global Listener) ---
     useEffect(() => {
