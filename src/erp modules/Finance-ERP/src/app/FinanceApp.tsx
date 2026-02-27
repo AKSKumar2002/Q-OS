@@ -28,7 +28,7 @@ import {
     ArrowLeftRight
 } from "lucide-react";
 
-import { FINANCE_NAVIGATION, FinanceModuleId, Invoice, ChartOfAccount } from "./finance-types";
+import { FINANCE_NAVIGATION, FinanceModuleId, Invoice, ChartOfAccount, Customer, Vendor, ProductItem, Expense } from "./finance-types";
 import { financeService } from "./finance-service";
 import { Button } from "../../../../app/components/ui/button";
 import { Card } from "../../../../app/components/ui/card";
@@ -48,32 +48,46 @@ export default function FinanceApp({ onBackToWorkspace, initialUser }: AppProps)
     const [user] = React.useState(initialUser || { name: "Admin", role: "CFO" });
     const [invoices, setInvoices] = React.useState<Invoice[]>([]);
     const [accounts, setAccounts] = React.useState<ChartOfAccount[]>([]);
+    const [customers, setCustomers] = React.useState<Customer[]>([]);
+    const [vendors, setVendors] = React.useState<Vendor[]>([]);
+    const [items, setItems] = React.useState<ProductItem[]>([]);
+    const [expenses, setExpenses] = React.useState<Expense[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
+    const [showForm, setShowForm] = React.useState(false);
+
+    const reload = async () => {
+        try {
+            const [inv, acc, cust, vend, itm, exp] = await Promise.all([
+                financeService.getInvoices(), financeService.getAccounts(),
+                financeService.getCustomers(), financeService.getVendors(),
+                financeService.getItems(), financeService.getExpenses()
+            ]);
+            setInvoices(inv); setAccounts(acc); setCustomers(cust);
+            setVendors(vend); setItems(itm); setExpenses(exp);
+        } catch (e) { console.error("Finance data load error:", e); }
+    };
 
     React.useEffect(() => {
-        const loadData = async () => {
-            try {
-                const dbInvoices = await financeService.getInvoices();
-                const dbAccounts = await financeService.getAccounts();
-                setInvoices(dbInvoices);
-                setAccounts(dbAccounts);
-            } catch (error) {
-                console.error("Finance data load error:", error);
-            } finally {
-                setTimeout(() => setIsLoading(false), 800);
-            }
-        };
-        loadData();
+        reload().finally(() => setTimeout(() => setIsLoading(false), 800));
     }, []);
 
     const renderContent = () => {
         if (isLoading) return <LoadingState />;
-
         switch (activeModule) {
-            case "fin-dashboard": return <DashboardView invoices={invoices} />;
+            case "fin-dashboard": return <DashboardView invoices={invoices} expenses={expenses} />;
+            case "fin-items": return <ItemsView items={items} reload={reload} showForm={showForm} setShowForm={setShowForm} />;
+            case "fin-customers": return <CustomersView customers={customers} reload={reload} showForm={showForm} setShowForm={setShowForm} />;
+            case "fin-vendors": return <VendorsView vendors={vendors} reload={reload} showForm={showForm} setShowForm={setShowForm} />;
+            case "fin-estimates": return <EstimatesView />;
             case "fin-invoices": return <InvoicesView invoices={invoices} />;
+            case "fin-bills": return <BillsView />;
+            case "fin-expenses": return <ExpensesView expenses={expenses} reload={reload} showForm={showForm} setShowForm={setShowForm} />;
+            case "fin-banking": return <BankingView />;
+            case "fin-journal": return <JournalView />;
             case "fin-accounts": return <AccountsView accounts={accounts} />;
             case "fin-projects": return <ProjectsView />;
+            case "fin-taxes": return <TaxesView />;
+            case "fin-reporting": return <ReportingView invoices={invoices} expenses={expenses} />;
             case "fin-settings": return <CompanyView />;
             default: return <UnderDevelopment />;
         }
@@ -158,7 +172,7 @@ export default function FinanceApp({ onBackToWorkspace, initialUser }: AppProps)
                                 className="pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm w-80 focus:ring-2 focus:ring-purple-100 transition-all"
                             />
                         </div>
-                        <Button className="bg-[#7C1CE2] hover:bg-purple-700 text-white rounded-xl gap-2 h-11 px-6 shadow-lg shadow-purple-100 font-bold uppercase text-[10px] tracking-widest">
+                        <Button onClick={() => setShowForm(prev => !prev)} className="bg-[#7C1CE2] hover:bg-purple-700 text-white rounded-xl gap-2 h-11 px-6 shadow-lg shadow-purple-100 font-bold uppercase text-[10px] tracking-widest">
                             <Plus size={18} /> Create New
                         </Button>
                     </div>
@@ -183,16 +197,17 @@ export default function FinanceApp({ onBackToWorkspace, initialUser }: AppProps)
 }
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────
-function DashboardView({ invoices }: { invoices: Invoice[] }) {
+function DashboardView({ invoices, expenses }: { invoices: Invoice[]; expenses: Expense[] }) {
     const totalRev = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.total_amount, 0);
+    const totalExp = expenses.reduce((sum, e) => sum + e.amount, 0);
     const unpaidRev = invoices.filter(i => i.status !== 'Paid' && i.status !== 'Void').reduce((sum, i) => sum + i.total_amount, 0);
 
     return (
         <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard label="Total Revenue" value={`₹${totalRev.toLocaleString()}`} icon={<TrendingUp />} color="emerald" />
-                <StatCard label="Total Expenses" value="₹0" icon={<TrendingDown />} color="rose" />
-                <StatCard label="Net Profit" value={`₹${totalRev.toLocaleString()}`} icon={<PieChart />} color="purple" />
+                <StatCard label="Total Expenses" value={`₹${totalExp.toLocaleString()}`} icon={<TrendingDown />} color="rose" />
+                <StatCard label="Net Profit" value={`₹${(totalRev - totalExp).toLocaleString()}`} icon={<PieChart />} color="purple" />
                 <StatCard label="Unpaid Receivables" value={`₹${unpaidRev.toLocaleString()}`} icon={<Wallet />} color="blue" />
             </div>
 
@@ -606,6 +621,225 @@ function CompanyView() {
             </div>
         </div>
     );
+}
+
+// ─── CRUD TABLE HELPER ────────────────────────────────────────────────
+function CrudView({ title, subtitle, columns, data, renderRow, onAdd, addLabel, emptyTitle, emptyMsg, emptyIcon: EIcon, showForm, setShowForm }: any) {
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">{title}</h2>
+                    <p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">{subtitle}</p>
+                </div>
+                <Button onClick={() => setShowForm(!showForm)} className="bg-[#7C1CE2] text-white rounded-2xl gap-2 h-12 px-8 font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-purple-100">
+                    <Plus size={18} /> {addLabel}
+                </Button>
+            </div>
+            {showForm && onAdd && <Card className="p-8 rounded-[2rem] border-none shadow-xl bg-white">{onAdd(() => setShowForm(false))}</Card>}
+            {data.length === 0 && !showForm ? (
+                <EmptyDataState title={emptyTitle} message={emptyMsg} icon={EIcon} />
+            ) : data.length > 0 ? (
+                <Card className="border-none shadow-xl rounded-[2rem] overflow-hidden bg-white">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                            <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">
+                                {columns.map((c: string) => <th key={c} className="px-8 py-5">{c}</th>)}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">{data.map(renderRow)}</tbody>
+                    </table>
+                </Card>
+            ) : null}
+        </div>
+    );
+}
+
+// ─── ITEMS VIEW ───────────────────────────────────────────────────────
+function ItemsView({ items, reload, showForm, setShowForm }: any) {
+    const addForm = (close: () => void) => {
+        const ref: any = { name: '', sku: '', description: '', price: 0, type: 'Service' };
+        const save = async () => {
+            await financeService.createItem(ref as any);
+            await reload(); close();
+        };
+        return (<div className="grid grid-cols-2 gap-4">
+            <Input placeholder="Item Name" onChange={e => ref.name = e.target.value} />
+            <Input placeholder="SKU" onChange={e => ref.sku = e.target.value} />
+            <Input placeholder="Description" onChange={e => ref.description = e.target.value} />
+            <Input placeholder="Price" type="number" onChange={e => ref.price = +e.target.value} />
+            <select className="border rounded-xl px-4 py-2 text-sm" onChange={e => ref.type = e.target.value}><option>Service</option><option>Goods</option></select>
+            <Button onClick={save} className="bg-[#7C1CE2] text-white rounded-xl">Save Item</Button>
+        </div>);
+    };
+    return <CrudView title="Items / Products" subtitle="Product & Service Catalog" columns={['Name', 'SKU', 'Type', 'Price']} data={items} showForm={showForm} setShowForm={setShowForm}
+        renderRow={(i: ProductItem) => (<tr key={i.id} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-5 font-bold text-slate-900">{i.name}</td><td className="px-8 py-5 text-slate-500">{i.sku}</td><td className="px-8 py-5"><Badge className={i.type === 'Goods' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}>{i.type}</Badge></td><td className="px-8 py-5 font-black">₹{i.price.toLocaleString()}</td></tr>)}
+        onAdd={addForm} addLabel="New Item" emptyTitle="No Items" emptyMsg="Add your first product or service." emptyIcon={Receipt} />;
+}
+
+// ─── CUSTOMERS VIEW ───────────────────────────────────────────────────
+function CustomersView({ customers, reload, showForm, setShowForm }: any) {
+    const addForm = (close: () => void) => {
+        const ref: any = { name: '', email: '', phone: '', address: '', currency: 'INR', outstanding_receivable: 0 };
+        const save = async () => { await financeService.createCustomer(ref); await reload(); close(); };
+        return (<div className="grid grid-cols-2 gap-4">
+            <Input placeholder="Customer Name" onChange={e => ref.name = e.target.value} />
+            <Input placeholder="Email" onChange={e => ref.email = e.target.value} />
+            <Input placeholder="Phone" onChange={e => ref.phone = e.target.value} />
+            <Input placeholder="Address" onChange={e => ref.address = e.target.value} />
+            <Input placeholder="Currency (INR)" onChange={e => ref.currency = e.target.value} />
+            <Button onClick={save} className="bg-[#7C1CE2] text-white rounded-xl">Save Customer</Button>
+        </div>);
+    };
+    return <CrudView title="Customers" subtitle="Client Database" columns={['Name', 'Email', 'Phone', 'Receivable']} data={customers} showForm={showForm} setShowForm={setShowForm}
+        renderRow={(c: Customer) => (<tr key={c.id} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-5 font-bold text-slate-900">{c.name}</td><td className="px-8 py-5 text-slate-500">{c.email}</td><td className="px-8 py-5 text-slate-500">{c.phone}</td><td className="px-8 py-5 font-black text-emerald-600">₹{c.outstanding_receivable.toLocaleString()}</td></tr>)}
+        onAdd={addForm} addLabel="New Customer" emptyTitle="No Customers" emptyMsg="Add your first client." emptyIcon={FileText} />;
+}
+
+// ─── VENDORS VIEW ─────────────────────────────────────────────────────
+function VendorsView({ vendors, reload, showForm, setShowForm }: any) {
+    const addForm = (close: () => void) => {
+        const ref: any = { name: '', email: '', phone: '', currency: 'INR', outstanding_payable: 0 };
+        const save = async () => { await financeService.createVendor(ref); await reload(); close(); };
+        return (<div className="grid grid-cols-2 gap-4">
+            <Input placeholder="Vendor Name" onChange={e => ref.name = e.target.value} />
+            <Input placeholder="Email" onChange={e => ref.email = e.target.value} />
+            <Input placeholder="Phone" onChange={e => ref.phone = e.target.value} />
+            <Input placeholder="Currency (INR)" onChange={e => ref.currency = e.target.value} />
+            <Button onClick={save} className="bg-[#7C1CE2] text-white rounded-xl">Save Vendor</Button>
+        </div>);
+    };
+    return <CrudView title="Vendors" subtitle="Supplier Database" columns={['Name', 'Email', 'Phone', 'Payable']} data={vendors} showForm={showForm} setShowForm={setShowForm}
+        renderRow={(v: Vendor) => (<tr key={v.id} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-5 font-bold text-slate-900">{v.name}</td><td className="px-8 py-5 text-slate-500">{v.email}</td><td className="px-8 py-5 text-slate-500">{v.phone}</td><td className="px-8 py-5 font-black text-rose-600">₹{v.outstanding_payable.toLocaleString()}</td></tr>)}
+        onAdd={addForm} addLabel="New Vendor" emptyTitle="No Vendors" emptyMsg="Add your first supplier." emptyIcon={Building2} />;
+}
+
+// ─── EXPENSES VIEW ────────────────────────────────────────────────────
+function ExpensesView({ expenses, reload, showForm, setShowForm }: any) {
+    const addForm = (close: () => void) => {
+        const ref: any = { date: new Date().toISOString().split('T')[0], category: '', payee: '', amount: 0, status: 'Pending', payment_mode: 'Cash' };
+        const save = async () => { await financeService.createExpense(ref); await reload(); close(); };
+        return (<div className="grid grid-cols-2 gap-4">
+            <Input placeholder="Date" type="date" onChange={e => ref.date = e.target.value} />
+            <Input placeholder="Category" onChange={e => ref.category = e.target.value} />
+            <Input placeholder="Payee" onChange={e => ref.payee = e.target.value} />
+            <Input placeholder="Amount" type="number" onChange={e => ref.amount = +e.target.value} />
+            <select className="border rounded-xl px-4 py-2 text-sm" onChange={e => ref.payment_mode = e.target.value}><option>Cash</option><option>Bank Transfer</option><option>Credit Card</option><option>UPI</option></select>
+            <Button onClick={save} className="bg-[#7C1CE2] text-white rounded-xl">Save Expense</Button>
+        </div>);
+    };
+    return <CrudView title="Expenses" subtitle="Expenditure Tracker" columns={['Date', 'Category', 'Payee', 'Amount', 'Mode', 'Status']} data={expenses} showForm={showForm} setShowForm={setShowForm}
+        renderRow={(e: Expense) => (<tr key={e.id} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-5 text-slate-500">{e.date}</td><td className="px-8 py-5 font-bold text-slate-900">{e.category}</td><td className="px-8 py-5 text-slate-500">{e.payee}</td><td className="px-8 py-5 font-black text-rose-600">₹{e.amount.toLocaleString()}</td><td className="px-8 py-5 text-slate-500">{e.payment_mode}</td><td className="px-8 py-5"><Badge className={e.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}>{e.status}</Badge></td></tr>)}
+        onAdd={addForm} addLabel="New Expense" emptyTitle="No Expenses" emptyMsg="Record your first expense." emptyIcon={TrendingDown} />;
+}
+
+// ─── ESTIMATES VIEW ───────────────────────────────────────────────────
+function EstimatesView() {
+    return (<div className="space-y-8">
+        <div className="flex items-center justify-between">
+            <div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Quotes / Estimates</h2><p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">Pre-Invoice Proposals</p></div>
+            <Button className="bg-[#7C1CE2] text-white rounded-2xl gap-2 h-12 px-8 font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-purple-100"><Plus size={18} /> New Estimate</Button>
+        </div>
+        <EmptyDataState title="No Estimates" message="Create your first quote or estimate for a client." icon={FileText} />
+    </div>);
+}
+
+// ─── BILLS VIEW ───────────────────────────────────────────────────────
+function BillsView() {
+    return (<div className="space-y-8">
+        <div className="flex items-center justify-between">
+            <div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Bills</h2><p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">Accounts Payable</p></div>
+            <Button className="bg-[#7C1CE2] text-white rounded-2xl gap-2 h-12 px-8 font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-purple-100"><Plus size={18} /> New Bill</Button>
+        </div>
+        <EmptyDataState title="No Bills" message="Record bills received from vendors." icon={Receipt} />
+    </div>);
+}
+
+// ─── BANKING VIEW ─────────────────────────────────────────────────────
+function BankingView() {
+    return (<div className="space-y-8">
+        <div className="flex items-center justify-between">
+            <div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Banking</h2><p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">Bank Account Reconciliation</p></div>
+            <Button className="bg-[#7C1CE2] text-white rounded-2xl gap-2 h-12 px-8 font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-purple-100"><Plus size={18} /> Connect Bank</Button>
+        </div>
+        <EmptyDataState title="No Bank Accounts" message="Connect your bank accounts to start reconciliation." icon={CreditCard} />
+    </div>);
+}
+
+// ─── JOURNAL VIEW ─────────────────────────────────────────────────────
+function JournalView() {
+    return (<div className="space-y-8">
+        <div className="flex items-center justify-between">
+            <div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Journal Entries</h2><p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">Manual Ledger Adjustments</p></div>
+            <Button className="bg-[#7C1CE2] text-white rounded-2xl gap-2 h-12 px-8 font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-purple-100"><Plus size={18} /> New Entry</Button>
+        </div>
+        <EmptyDataState title="No Journal Entries" message="Create manual debit/credit adjustments." icon={History} />
+    </div>);
+}
+
+// ─── TAXES VIEW ───────────────────────────────────────────────────────
+function TaxesView() {
+    return (<div className="space-y-8">
+        <div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Settings / Taxes</h2><p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">Tax Configuration</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Card className="p-8 rounded-[2rem] border-none shadow-xl bg-white">
+                <h3 className="text-lg font-black text-slate-900 mb-6">Tax Rates</h3>
+                <div className="space-y-4">
+                    {[{ name: 'GST 18%', rate: 18 }, { name: 'GST 12%', rate: 12 }, { name: 'GST 5%', rate: 5 }, { name: 'VAT 5%', rate: 5 }].map(t => (
+                        <div key={t.name} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
+                            <span className="font-bold text-slate-900">{t.name}</span>
+                            <Badge className="bg-purple-100 text-purple-700">{t.rate}%</Badge>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+            <Card className="p-8 rounded-[2rem] border-none shadow-xl bg-white">
+                <h3 className="text-lg font-black text-slate-900 mb-6">Preferences</h3>
+                <div className="space-y-4">
+                    {['Fiscal Year: April – March', 'Default Currency: INR', 'Accounting Method: Accrual', 'Invoice Prefix: INV-'].map(p => (
+                        <div key={p} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                            <Settings size={16} className="text-slate-400" />
+                            <span className="text-sm font-bold text-slate-700">{p}</span>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        </div>
+    </div>);
+}
+
+// ─── REPORTING VIEW ───────────────────────────────────────────────────
+function ReportingView({ invoices, expenses }: { invoices: Invoice[]; expenses: Expense[] }) {
+    const totalRev = invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + i.total_amount, 0);
+    const totalExp = expenses.reduce((s, e) => s + e.amount, 0);
+    return (<div className="space-y-8">
+        <div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Reports</h2><p className="text-sm font-medium text-slate-400 uppercase tracking-widest mt-1">Financial Statements & Analytics</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Card className="p-8 rounded-[2rem] border-none shadow-xl bg-white text-center">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Revenue</h3>
+                <p className="text-4xl font-black text-emerald-600">₹{totalRev.toLocaleString()}</p>
+            </Card>
+            <Card className="p-8 rounded-[2rem] border-none shadow-xl bg-white text-center">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Expenses</h3>
+                <p className="text-4xl font-black text-rose-600">₹{totalExp.toLocaleString()}</p>
+            </Card>
+            <Card className="p-8 rounded-[2rem] border-none shadow-xl bg-[#7C1CE2] text-center text-white">
+                <h3 className="text-sm font-black text-purple-200 uppercase tracking-widest mb-4">Net Profit</h3>
+                <p className="text-4xl font-black">₹{(totalRev - totalExp).toLocaleString()}</p>
+            </Card>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {['Profit & Loss Statement', 'Balance Sheet', 'Cash Flow Statement', 'Trial Balance', 'Accounts Receivable Aging', 'Accounts Payable Aging'].map(r => (
+                <Card key={r} className="p-6 rounded-[2rem] border-none shadow-lg bg-white flex items-center justify-between group hover:shadow-xl transition-all cursor-pointer">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center"><Download size={20} className="text-[#7C1CE2]" /></div>
+                        <span className="font-bold text-slate-900">{r}</span>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300 group-hover:text-[#7C1CE2] group-hover:translate-x-1 transition-all" />
+                </Card>
+            ))}
+        </div>
+    </div>);
 }
 
 // ─── HELPER COMPONENTS ───────────────────────────────────────────────

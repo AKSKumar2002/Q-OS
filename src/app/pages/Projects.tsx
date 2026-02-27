@@ -35,7 +35,7 @@ import { collection, doc, addDoc, updateDoc, getDocs, getDoc, query, where, orde
 
 // --- Types ---
 type ViewType = 'dashboard' | 'projects' | 'tasks' | 'workload' | 'reports' | 'settings' | 'project-detail';
-type ProjectDetailTab = 'overview' | 'board' | 'list' | 'gantt' | 'calendar' | 'files' | 'time' | 'analytics' | 'automation';
+type ProjectDetailTab = 'overview' | 'board' | 'requirements' | 'list' | 'gantt' | 'calendar' | 'files' | 'time' | 'analytics' | 'automation';
 
 const GS_API_URL = 'https://script.google.com/macros/s/AKfycby3kgcdq5dgx7AdkPKbV2-OH3f5cPWdW6YFdqUHIwqSkDobLu3fd7wvo-yV6Cprjs9TTw/exec';
 
@@ -48,6 +48,20 @@ interface Task {
     priority: string;
     assignee_id: string;
     due_date: string;
+    created_at: string;
+}
+
+interface Requirement {
+    id: string;
+    project_id: string;
+    tenant_id: string;
+    title: string;
+    description: string;
+    priority: 'Low' | 'Medium' | 'High' | 'Critical';
+    status: 'Draft' | 'Approved' | 'In Progress' | 'Completed';
+    category: string;
+    due_date: string;
+    updated_at: string;
     created_at: string;
 }
 
@@ -265,6 +279,10 @@ interface ProjectDetailViewProps {
     onAddMilestone: () => void;
     onToggleMilestone: (id: string, currentStatus: string) => void;
     onEditMilestone: (m: any) => void;
+    requirements: Requirement[];
+    onAddRequirement: () => void;
+    onUpdateRequirementField: (id: string, field: string, value: any) => void;
+    onDeleteRequirement: (id: string) => void;
     user?: any;
 }
 
@@ -283,6 +301,10 @@ function ProjectDetailView({
     onAddMilestone,
     onToggleMilestone,
     onEditMilestone,
+    requirements,
+    onAddRequirement,
+    onUpdateRequirementField,
+    onDeleteRequirement,
     user
 }: ProjectDetailViewProps) {
     const isPM = user?.role === 'Project Manager';
@@ -294,6 +316,7 @@ function ProjectDetailView({
                     {[
                         { id: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
                         { id: 'board', label: 'Board', icon: <Trello className="w-4 h-4" /> },
+                        { id: 'requirements', label: 'Requirements', icon: <Layers className="w-4 h-4" /> },
                         { id: 'list', label: 'Task List', icon: <ListTodo className="w-4 h-4" /> },
                         { id: 'gantt', label: 'Gantt', icon: <GanttChartSquare className="w-4 h-4" /> },
                         { id: 'calendar', label: 'Calendar', icon: <Calendar className="w-4 h-4" /> },
@@ -688,9 +711,10 @@ function ProjectDetailView({
                                         <input
                                             type="text"
                                             defaultValue={project.client_name || ''}
-                                            onBlur={(e) => (window as any).updateProjectField(project.id, 'client_name', e.target.value)}
+                                            onBlur={(e) => !isPM && (window as any).updateProjectField(project.id, 'client_name', e.target.value)}
+                                            disabled={isPM}
                                             placeholder="Client Name"
-                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0"
+                                            className="font-bold text-gray-900 bg-transparent border-none text-[10px] text-right p-0 focus:ring-0 disabled:cursor-not-allowed"
                                         />
                                     </div>
                                 </div>
@@ -963,6 +987,135 @@ function ProjectDetailView({
                     </div>
                 )}
 
+                {activeTab === 'requirements' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-2xl bg-purple-50 text-[#7C1CE2] shadow-sm shadow-purple-100">
+                                    <Layers className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-gray-900 tracking-tighter uppercase">Track Requirements</h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Base configuration & specs</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={onAddRequirement}
+                                className="px-6 py-2.5 bg-gray-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-gray-800 transition-all shadow-xl shadow-gray-200"
+                            >
+                                <Plus className="w-4 h-4" /> New Spec
+                            </button>
+                        </div>
+
+                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Requirement / Spec</th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Category</th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Priority</th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Due Date</th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Status</th>
+                                        <th className="px-8 py-5 text-right font-black text-gray-400 uppercase tracking-[0.2em]">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {requirements.filter(r => r.project_id === project.id).length > 0 ? requirements.filter(r => r.project_id === project.id).map((req) => (
+                                        <tr key={req.id} className="group hover:bg-gray-50/30 transition-all">
+                                            <td className="px-8 py-6">
+                                                <div className="flex flex-col gap-2 max-w-md">
+                                                    <input
+                                                        type="text"
+                                                        defaultValue={req.title}
+                                                        onBlur={(e) => onUpdateRequirementField(req.id, 'title', e.target.value)}
+                                                        className="text-sm font-black text-gray-900 bg-transparent border-none p-0 focus:ring-0 placeholder-gray-300 w-full"
+                                                        placeholder="Requirement Title"
+                                                    />
+                                                    <textarea
+                                                        defaultValue={req.description}
+                                                        onBlur={(e) => onUpdateRequirementField(req.id, 'description', e.target.value)}
+                                                        className="text-[10px] font-medium text-gray-400 bg-transparent border-none p-0 focus:ring-0 placeholder-gray-300 w-full resize-none CustomScroll"
+                                                        placeholder="Add detailed specifications or context here..."
+                                                        rows={2}
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-6">
+                                                <input
+                                                    type="text"
+                                                    defaultValue={req.category}
+                                                    onBlur={(e) => onUpdateRequirementField(req.id, 'category', e.target.value)}
+                                                    className="text-[10px] font-black text-blue-600 bg-blue-50/50 px-2 py-1 rounded-lg border-none focus:ring-0 placeholder-blue-300 uppercase tracking-widest w-24"
+                                                    placeholder="CATEGORY"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-6">
+                                                <select
+                                                    defaultValue={req.priority}
+                                                    onChange={(e) => onUpdateRequirementField(req.id, 'priority', e.target.value)}
+                                                    className={`text-[10px] font-black uppercase tracking-widest bg-transparent border-none focus:ring-0 cursor-pointer p-0 ${req.priority === 'High' || req.priority === 'Critical' ? 'text-red-500' : 'text-gray-500'}`}
+                                                >
+                                                    <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-6 py-6 font-bold text-gray-700">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="date"
+                                                        defaultValue={req.due_date}
+                                                        onChange={(e) => onUpdateRequirementField(req.id, 'due_date', e.target.value)}
+                                                        className="text-[10px] font-black text-gray-500 bg-gray-50 px-2 py-1 rounded-lg border-none focus:ring-0 cursor-pointer"
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-6">
+                                                <select
+                                                    defaultValue={req.status}
+                                                    onChange={(e) => onUpdateRequirementField(req.id, 'status', e.target.value)}
+                                                    className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] border-none focus:ring-0 cursor-pointer transition-all ${req.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' :
+                                                        req.status === 'In Progress' ? 'bg-blue-50 text-blue-600' :
+                                                            req.status === 'Approved' ? 'bg-purple-50 text-purple-600' : 'bg-gray-50 text-gray-400'
+                                                        }`}
+                                                >
+                                                    <option>Draft</option><option>Approved</option><option>In Progress</option><option>Completed</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <div className="flex items-center justify-end gap-2 group-hover:opacity-100 transition-all">
+                                                    <div className="text-[8px] font-black text-gray-300 uppercase tracking-tight mr-4">
+                                                        Updated: {req.updated_at ? new Date(req.updated_at).toLocaleDateString() : 'Never'}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => onDeleteRequirement(req.id)}
+                                                        className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-xl transition-all"
+                                                        title="Delete Spec"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={6} className="py-24 text-center">
+                                                <div className="flex flex-col items-center gap-4">
+                                                    <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300">
+                                                        <Layers className="w-6 h-6" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">No Requirements Established</p>
+                                                        <p className="text-[10px] font-bold text-gray-300 italic">Click "New Spec" to start configuring this track</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'gantt' && (
                     <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm overflow-hidden min-h-[500px]">
                         <div className="flex items-center justify-between mb-10">
@@ -1157,6 +1310,7 @@ export default function Projects() {
     };
     const [projects, setProjects] = useState<any[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [requirements, setRequirements] = useState<Requirement[]>([]);
     const [selectedProject, setSelectedProject] = useState<any | null>(null);
     const [projectTab, setProjectTab] = useState<ProjectDetailTab>('overview');
     const [isLoading, setIsLoading] = useState(true);
@@ -1175,14 +1329,17 @@ export default function Projects() {
     const [newMilestone, setNewMilestone] = useState({ title: '', due_date: '' });
     const [editingMilestone, setEditingMilestone] = useState<any>(null);
     const [user, setUser] = useState<any>(null);
-    const tenantId = getCurrentTenantId();
+
+    // Pure helper to get ID from current state or storage
+    const getActiveTenantId = () => user?.company || user?.tenant_id || getCurrentTenantId();
 
     useEffect(() => {
         const savedUser = localStorage.getItem('alphery_user');
         if (!savedUser) { navigate('/'); return; }
         const parsed = JSON.parse(savedUser);
         setUser(parsed);
-        loadData(parsed.company || parsed.tenant_id);
+        const tId = parsed.company || parsed.tenant_id;
+        if (tId) loadData(tId);
     }, [navigate]);
 
     const [showTaskEdit, setShowTaskEdit] = useState<any>(null);
@@ -1212,19 +1369,36 @@ export default function Projects() {
     };
 
     const loadData = async (tId: string, silent = false) => {
+        if (!tId) {
+            console.warn('loadData called without tenant ID');
+            setIsLoading(false);
+            return;
+        }
         if (!silent) setIsLoading(true);
-        const savedUser = localStorage.getItem('alphery_user');
-        const sheetName = savedUser ? JSON.parse(savedUser).company : tId;
-        fetchCompanyUsers(sheetName || tId);
         try {
+            console.log(`[Engine] Synchronizing node for tenant: ${tId}`);
             // 1. Fetch Projects, Tasks & Milestones from Firestore
-            const projQ = query(collection(db, 'projects'), where('tenant_id', '==', tId), orderBy('created_at', 'desc'));
+            const projQ = query(collection(db, 'projects'), where('tenant_id', '==', tId));
             const taskQ = query(collection(db, 'tasks'), where('tenant_id', '==', tId));
-            const mileQ = query(collection(db, 'milestones'), where('tenant_id', '==', tId), orderBy('due_date', 'asc'));
+            const mileQ = query(collection(db, 'milestones'), where('tenant_id', '==', tId));
+            const reqQ = query(collection(db, 'requirements'), where('tenant_id', '==', tId));
 
-            const [projSnap, taskSnap, mileSnap] = await Promise.all([getDocs(projQ), getDocs(taskQ), getDocs(mileQ)]);
+            const [projSnap, taskSnap, mileSnap, reqSnap] = await Promise.all([
+                getDocs(projQ),
+                getDocs(taskQ),
+                getDocs(mileQ),
+                getDocs(reqQ)
+            ]).catch(err => {
+                if (err.message?.includes('index')) {
+                    console.error('CRITICAL: Firestore Index required. Check Firebase console logs.');
+                    alert('Database optimization required. Some data may be hidden until indexes are built.');
+                }
+                throw err;
+            });
 
-            let projData = projSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => !p.deleted_at);
+            let projData = projSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .filter((p: any) => !p.deleted_at)
+                .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
             // Filter for Project Managers: Only show projects allocated to them
             const storedUser = localStorage.getItem('alphery_user');
@@ -1234,14 +1408,24 @@ export default function Projects() {
                 const isAdmin = sUser.level === 'L0' || sUser.level === 'L1' || sUser.role === 'Super Admin';
 
                 if (isPM && !isAdmin) {
+                    const originalCount = projData.length;
                     projData = projData.filter((p: any) => {
-                        if (!p.allocated_to || !sUser.username) return false;
-                        return p.allocated_to.toString().trim().toLowerCase() === sUser.username.toString().trim().toLowerCase();
+                        // Project Managers see projects ALLOCATED to them OR projects they CREATED
+                        const isAllocated = p.allocated_to && p.allocated_to.toString().trim().toLowerCase() === sUser.username?.toString().trim().toLowerCase();
+                        const isCreator = p.created_by && p.created_by.toString().trim().toLowerCase() === sUser.username?.toString().trim().toLowerCase();
+                        return isAllocated || isCreator;
                     });
+                    if (originalCount > 0 && projData.length === 0) {
+                        console.warn('PM Filter hid all projects. Ensure "Allocated To" matches your username.');
+                    }
                 }
             }
             const taskData = taskSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((t: any) => !t.deleted_at);
-            const mileData = mileSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const mileData = mileSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .sort((a: any, b: any) => new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime());
+            const reqData = reqSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .filter((r: any) => !r.deleted_at)
+                .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
             // 2. Filter tasks/milestones based on active projects
             const activeProjectIds = new Set(projData.map((p: any) => p.id));
@@ -1251,6 +1435,7 @@ export default function Projects() {
             // 3. Calculate Progress for each project
             const enhancedProjects = projData.map((p: any) => {
                 const pTasks = filteredTasks.filter((t: any) => t.project_id === p.id);
+                const pReqs = reqData.filter((r: any) => r.project_id === p.id);
                 const done = pTasks.filter((t: any) => t.status === 'Done').length;
                 const calculatedProg = pTasks.length > 0 ? Math.round((done / pTasks.length) * 100) : 0;
                 return { ...p, progress: p.progress > 0 ? p.progress : calculatedProg };
@@ -1259,6 +1444,7 @@ export default function Projects() {
             setProjects(enhancedProjects);
             setTasks(filteredTasks as any);
             setMilestones(filteredMilestones);
+            setRequirements(reqData as any);
 
             // 4. Stats logic
             const activeCount = filteredTasks.filter((t: any) => t.status !== 'Done').length;
@@ -1288,10 +1474,16 @@ export default function Projects() {
     (window as any).currentProjectTasks = tasks.filter(t => t.project_id === selectedProject?.id);
     (window as any).toggleTaskModal = (val: boolean) => setShowTaskModal(val);
     (window as any).updateTaskStatus = async (id: string, newStatus: string) => {
-        try { await updateDoc(doc(db, 'tasks', id), { status: newStatus }); loadData(tenantId!, true); } catch (err) { console.error(err); }
+        try {
+            await updateDoc(doc(db, 'tasks', id), { status: newStatus });
+            loadData(getActiveTenantId()!, true);
+        } catch (err) { console.error(err); }
     };
     (window as any).deleteTask = async (id: string) => {
-        try { await updateDoc(doc(db, 'tasks', id), { deleted_at: new Date().toISOString() }); loadData(tenantId!, true); } catch (err) { console.error(err); }
+        try {
+            await updateDoc(doc(db, 'tasks', id), { deleted_at: new Date().toISOString() });
+            loadData(getActiveTenantId()!, true);
+        } catch (err) { console.error(err); }
     };
     (window as any).updateTaskField = async (id: string, field: string, value: any) => {
         // Optimistic UI
@@ -1310,7 +1502,10 @@ export default function Projects() {
         }
     };
     (window as any).updateProjectBudget = async (id: string, budget: string) => {
-        try { await updateDoc(doc(db, 'projects', id), { budget_allocated: parseFloat(budget) }); loadData(tenantId!, true); } catch (err) { console.error(err); }
+        try {
+            await updateDoc(doc(db, 'projects', id), { budget_allocated: parseFloat(budget) });
+            loadData(getActiveTenantId()!, true);
+        } catch (err) { console.error(err); }
     };
     (window as any).isEngineSaving = isSaving;
     (window as any).updateProjectField = async (id: string, field: string, value: any) => {
@@ -1352,12 +1547,13 @@ export default function Projects() {
     };
 
     const handleCreateTask = async () => {
-        if (!newTask.title.trim() || !selectedProject || !tenantId) return;
+        const curTenantId = getActiveTenantId();
+        if (!newTask.title.trim() || !selectedProject || !curTenantId) return;
         setIsSaving(true);
         try {
             const taskData = {
                 project_id: selectedProject.id,
-                tenant_id: tenantId,
+                tenant_id: curTenantId,
                 title: newTask.title,
                 description: newTask.description,
                 status: newTask.status,
@@ -1369,12 +1565,13 @@ export default function Projects() {
             setTasks([...tasks, { id: newTaskRef.id, ...taskData } as any]);
             setShowTaskModal(false);
             setNewTask({ title: '', description: '', priority: 'Medium', status: 'To Do', assignee: '' });
-            loadData(tenantId, true);
+            loadData(curTenantId, true);
         } finally { setIsSaving(false); }
     };
 
     const handleCreate = async () => {
-        if (!newProject.name.trim() || !tenantId) return;
+        const curTenantId = getActiveTenantId();
+        if (!newProject.name.trim() || !curTenantId) return;
         setIsSaving(true);
         try {
             const projData = {
@@ -1383,7 +1580,7 @@ export default function Projects() {
                 type: newProject.type,
                 priority: newProject.priority,
                 budget_allocated: parseFloat(newProject.budget),
-                tenant_id: tenantId,
+                tenant_id: curTenantId,
                 created_by: user?.username || 'System',
                 is_partially_paid: newProject.is_partially_paid,
                 partially_paid_amount: parseFloat(newProject.partially_paid_amount) || 0,
@@ -1440,9 +1637,10 @@ export default function Projects() {
                     due_date: newMilestone.due_date || null
                 });
             } else {
+                const curTenantId = getActiveTenantId();
                 await addDoc(collection(db, 'milestones'), {
                     project_id: selectedProject.id,
-                    tenant_id: tenantId,
+                    tenant_id: curTenantId,
                     title: newMilestone.title,
                     due_date: newMilestone.due_date || null,
                     status: 'Pending'
@@ -1451,7 +1649,7 @@ export default function Projects() {
             setShowMilestoneModal(false);
             setEditingMilestone(null);
             setNewMilestone({ title: '', due_date: '' });
-            loadData(tenantId!, true);
+            loadData(getActiveTenantId()!, true);
         } catch (err) {
             console.error('Milestone Operation Error:', err);
         } finally {
@@ -1470,6 +1668,51 @@ export default function Projects() {
             console.error('Milestone Update Error:', err);
             // Revert on error
             setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: currentStatus } : m));
+        }
+    };
+
+    const handleUpdateRequirementField = async (id: string, field: string, value: any) => {
+        setRequirements(prev => prev.map(r => r.id === id ? { ...r, [field]: value, updated_at: new Date().toISOString() } : r));
+        try {
+            await updateDoc(doc(db, 'requirements', id), { [field]: value, updated_at: new Date().toISOString() });
+        } catch (err) {
+            console.error('Update Requirement Error:', err);
+            loadData(getActiveTenantId()!, true);
+        }
+    };
+
+    const handleAddRequirement = async () => {
+        const curTenantId = getActiveTenantId();
+        if (!selectedProject || !curTenantId) return;
+        setIsSaving(true);
+        try {
+            await addDoc(collection(db, 'requirements'), {
+                project_id: selectedProject.id,
+                tenant_id: curTenantId,
+                title: 'New Requirement',
+                description: '',
+                priority: 'Medium',
+                status: 'Draft',
+                category: 'Functional',
+                due_date: new Date().toISOString().split('T')[0],
+                updated_at: new Date().toISOString(),
+                created_at: new Date().toISOString()
+            });
+            loadData(curTenantId, true);
+        } catch (err) {
+            console.error('Add Requirement Error:', err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteRequirement = async (id: string) => {
+        if (!confirm('Permanently remove this requirement?')) return;
+        try {
+            await updateDoc(doc(db, 'requirements', id), { deleted_at: new Date().toISOString() });
+            loadData(getActiveTenantId()!, true);
+        } catch (err) {
+            console.error('Delete Requirement Error:', err);
         }
     };
 
@@ -1547,7 +1790,7 @@ export default function Projects() {
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Connected Node</p>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-xs font-bold text-gray-800 truncate">{tenantId || 'Stand-alone'}</span>
+                            <span className="text-xs font-bold text-gray-800 truncate">{getActiveTenantId() || 'Stand-alone'}</span>
                         </div>
                     </div>
                 </div>
@@ -1627,6 +1870,10 @@ export default function Projects() {
                                 setNewMilestone({ title: m.title, due_date: m.due_date ? new Date(m.due_date).toISOString().split('T')[0] : '' });
                                 setShowMilestoneModal(true);
                             }}
+                            requirements={requirements}
+                            onAddRequirement={handleAddRequirement}
+                            onUpdateRequirementField={handleUpdateRequirementField}
+                            onDeleteRequirement={handleDeleteRequirement}
                             user={user}
                         />
                     )}
@@ -1664,13 +1911,15 @@ export default function Projects() {
                                                 <td className="px-6 py-4 text-xs font-black text-gray-900">₹{Number(p.budget_allocated).toLocaleString('en-IN')}</td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(p.id); }}
-                                                            className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
-                                                            title="Delete Track"
-                                                        >
-                                                            <MoreHorizontal className="w-4 h-4" />
-                                                        </button>
+                                                        {(user?.level === 'L0' || user?.level === 'L1') && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(p.id); }}
+                                                                className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
+                                                                title="Delete Track"
+                                                            >
+                                                                <MoreHorizontal className="w-4 h-4" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

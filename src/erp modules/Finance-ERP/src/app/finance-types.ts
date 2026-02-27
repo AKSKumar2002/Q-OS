@@ -115,5 +115,32 @@ export interface ProjectFinance {
     actual_cost: number;
     remaining_budget: number;
     revenue: number;
-    profit: number;
+}
+
+export interface Customer {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    currency: string;
+    outstanding_receivable: number;
+}
+
+export interface Vendor {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    currency: string;
+    outstanding_payable: number;
+}
+
+export interface ProductItem {
+    id: string;
+    name: string;
+    sku: string;
+    description: string;
+    price: number;
+    type: "Goods" | "Service";
 }
